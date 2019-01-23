@@ -1,0 +1,59 @@
+/* ZTP GUI Web App
+Author: Tim Dorssers
+Version: 1.0 */
+html {
+    background-color: #eee;
+    font-family: arial, sans-serif;
+}
+body {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    padding: 0px 15px 0px 15px;
+    margin: 15px;
+}
+.box {
+    background-color: #eee;
+    border: 1px solid #ddd;
+    padding: 5px;
+}
+.wide {
+    width: 100%;
+}
+td {
+    padding: 1px 3px 1px 3px;
+}
+td.min {
+    width: 1%;
+    white-space: nowrap;
+}
+tr.center {
+    text-align: center;
+}
+span {
+	font-size: small;
+}
+.progress {
+    border: 1px solid #777;
+    font-size: small;
+}
+.bar {
+    width: 0%;
+    background: skyblue;
+    height: 20px;
+    text-align: center;
+    line-height: 20px;
+}
+.dropdown {
+    position: relative;
+}
+.dropdown select {
+    width: 100%;
+}
+.dropdown > * {
+    box-sizing: border-box;
+    height: 1.5em;
+}
+.dropdown input {
+    position: absolute;
+    width: calc(100% - 20px);
+}
