@@ -8,23 +8,25 @@ Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/pro
 
 The Python script has the following functionality built-in:
 - Downloads and installs IOS-XE software from a given URL, if needed
+- Changes Boot Mode to installed, if device is in bundled boot mode
 - Performs stack renumbering, based on a specified list of serial numbers and switch numbers
-- Can handle stack version mismatches using ‘auto upgrade’
+- Sets switch priorities, highest priority on the top switch
+- Handles stack version mismatches using ‘auto upgrade’
 - Turns on the blue beacons of a switch stack in case serial numbers are missing or are extra
-- Uses an internal dictionary for data storage, such as serial numbers and configuration templates
-- Can also use an external dictionary by downloading a JSON text file (to use the GUI App)
+- Uses an external dictionary by downloading a specified JSON text file (refer to GUI App for details)
+- Can also use an internal dictionary for data storage, such as serial numbers and configuration templates
 - Applies a configuration template, using $-based placeholders for variable substitutions
-- Can also download an external template file from a server
-- Executes commands upon script completion, such as Smart Licensing registration
-- Can save the configuration if the workflow has completed successfully
+- Can also download an external template file from a given URL
+- Executes commands upon script completion, such as for Smart Licensing registration
+- Can save the device configuration, if the workflow has completed successfully
 - Sends logging to a specified syslog server for script monitoring
 
 ## Using
 
 `script.py` needs 3 variables to be filled in by the user:
 - SYSLOG is an IP address string of the syslog server, an empty string disables syslog
-- JSON is a string with URL of the JSON encoded DATA object as specified below. Empty string disables device data that is external to the script.
-- DATA is a list of dicts that defines device data. Empty list disables the to the script internal data. To specify device defaults, omit the key named `stack` from one dict. Valid keys and values are:
+- JSON is a string with URL of the JSON encoded DATA object as specified below. Empty string disables downloading of external device data.
+- DATA is a list of dicts that defines device data. Empty list disables the internal data of the script. To specify device defaults, omit the key named `stack` from one dict. Valid keys and values are:
 
   Key | Value
   --- | ---
@@ -89,12 +91,12 @@ Call | Description
 `DELETE /file/<name>` | the request removes the specified file from disk
 `POST /file` | used by the AJAX client form to upload a file to the server 
 `GET /list` | the server sends a JSON text list of all files in the script directory and subdirectories 
-`GET /data` | upon receiving the request, the server sends the JSON text to the client/switch
-`POST /data` | the client sends the JSON text to the server using the HTML POST method
-`GET /csv` | CSV file export of flattened JSON data
-`POST /csv` | CSV file import of flattened JSON data
+`GET /data` | upon receiving the request, the server sends the dataset as JSON text to the client/switch
+`POST /data` | the client sends the dataset as JSON text to the server using the HTML POST method
+`GET /csv` | upon receiving the request, the server flattens the dataset and exports it as a CSV file
+`POST /csv` | the client sends the CSV file with the flattened dataset to the server for importing
 
-`App.py` validates the format of the data received by the `POST /data` API before writing it to `data.json` file and when the data is read from file for the `GET /data` API call. HTTP status code 500 is returned in case of invalid or missing data. Files are served from the current working directory.
+`App.py` validates the format of the data received by the `POST` APIs before writing it to `data.json` file and when the data is read from file for the `GET /data` and `GET /csv` API call. HTTP status code 500 is returned in case of invalid or missing data. Files are served from the current working directory.
 
 ![](media/gui.png)
 

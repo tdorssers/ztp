@@ -66,10 +66,8 @@ def get_list():
     flist = []
     for root, dirs, files in os.walk('.'):
         # Don't visit hidden directories
-        for name in dirs:
-            if name.startswith('.'):
-                dirs.remove(name)
-
+        dirs[:] = [name for name in dirs if not name.startswith('.')]
+        # Exclude specific and hidden files
         for name in files:
             if not name in HIDE and not name.startswith('.'):
                 fname = os.path.join(root, name)

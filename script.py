@@ -25,21 +25,21 @@ import base64
 from string import Template
 from xml.dom import minidom
 try:
-    from urllib.parse import urljoin
-except ImportError:
     from urlparse import urljoin
+except ImportError:
+    from urllib.parse import urljoin
 
 ##### CONSTANTS ################################################################
 
 SYSLOG = '10.0.0.1'  # Syslog IP address string, empty string disables syslog
 
 # JSON is a string with URL of the JSON encoded DATA object as specified below.
-# Empty string disables device data that is external to the script.
+# Empty string disables downloading of external device data.
 JSON = 'http://10.0.0.1:8080/data'
 
 # DATA is a list of dicts that defines device data. To specify device defaults,
-# omit the key named 'stack' from one dict. Empty list disables the to the
-# script internal data. Valid keys and values are:
+# omit the key named 'stack' from one dict. Empty list disables the internal
+# data of the script. Valid keys and values are:
 # 'stack'   : dict with target switch number as key and serial number as value
 # 'version' : string with target version used to determine if upgrade is needed
 # 'base_url': string with base URL to optionally join with install/config URL
@@ -80,15 +80,32 @@ def get_serials():
 
     return serials
 
+def is_iosxe_package(url):
+    """ Returns True if the given file is an IOS-XE package """
+    info = cli.execute('show file information %s' % url)
+    # log error message if any and terminate script in case of failure
+    match = re.match('^(%Error .*)', info)
+    if match:
+        log(3, match.group(1))
+        shutdown(save=False, abnormal=True)
+
+    match = re.search('type is (.*)', info)
+    return 'IOSXE_PACKAGE' in match.group(1) if match else False
+
 def get_version():
     """ Returns a string with the IOS version """
     version = cli.execute('show version')
     # extract version string
     match = re.search('Version ([A-Za-z0-9.:()]+)', version)
-    # remove leading zeros from numbers if version was extracted
-    return re.sub(r'\b0+(\d)', r'\1', match.group(1)) if match else 'Unknown'
+    # remove leading zeros from numbers
+    ver_str = re.sub(r'\b0+(\d)', r'\1', match.group(1)) if match else 'unknown'
+    # extract boot string
+    match = re.search('System image file is "(.*)"', version)
+    # check if the device started in bundle mode
+    ver_str += ' bundle' if match and is_iosxe_package(match.group(1)) else ''
+    return ver_str
 
-def shutdown(save):
+def shutdown(save=False, abnormal=False):
     """ Cleansup and saves config if needed and terminates script """
     if save:
         log(6, 'Saving configuration upon script termination')
@@ -100,10 +117,14 @@ def shutdown(save):
     if save:
         cli.execute('copy running-config startup-config')
 
-    sys.exit()
+    sys.exit(int(abnormal))
 
 def renumber_stack(stack, serials):
     """ Returns True if stack is renumbered or False otherwise """
+    if stack is None:
+        return False
+
+    # renumber switches
     renumber = False
     for old_num in serials:
         for new_num in stack:
@@ -115,45 +136,77 @@ def renumber_stack(stack, serials):
                     log(6, 'Renumbered switch {} to {}'.format(old_num, new_num))
                 except cli.CLISyntaxError as e:
                     log(3, e)
-                    shutdown(False)  # terminate script
+                    shutdown(save=False, abnormal=True)  # terminate script
+
+    # set switch priorities
+    switch = cli.execute('show switch')
+    match = re.findall('(\d)\s+\S+\s+\S+\s+(\d+)', switch)
+    for num, old_prio in match:
+        new_prio = 16 - int(num)
+        if (int(old_prio) != new_prio):
+            # check if top switch is not active
+            if switch.find('*{}'.format(sorted(serials.keys())[0])) == -1:
+                renumber = True
+
+            # set switch priority and log error message in case of failure
+            try:
+                cli.execute('switch %s priority %d' % (num, new_prio))
+                log(6, 'Switch %s priority set to %d' % (num, new_prio))
+            except cli.CLISyntaxError as e:
+                log(3, e)
+                shutdown(save=False, abnormal=True)  # terminate script
+
+    if renumber:
+        for num in serials.keys():
+            # to prevent recovery from backup nvram
+            try:
+                cli.execute('delete flash-%s:nvram_config*' % num)
+            except cli.CLISyntaxError as e:
+                pass
 
     return renumber
 
 def install(version, required, base_url, install_url, is_rtr):
     """ Returns True if install script is configured or False otherwise """
-    # remove leading zeros from version numbers and compare
+    # remove leading zeros from required version numbers and compare
     if (required is None or install_url is None
         or version == re.sub(r'\b0+(\d)', r'\1', required.strip())):
             return False
 
     install_url = urljoin(base_url, install_url)
-    # compose destination file path to copy file
-    fs = 'bootflash:' if is_rtr else 'flash:'
-    dest_file = os.path.join(fs, os.path.split(install_url)[1])
-    log(6, 'Downloading %s...' % install_url)
-    result = cli.execute('copy %s %s' % (install_url, dest_file))
-    # log error message if any and terminate script in case of failure
-    match = re.search('^(%Error .*)', result, re.MULTILINE)
-    if match:
-        log(3, match.group(1))
-        shutdown(False)
+    # terminate script in case of invalid file
+    log(6, 'Checking %s' % install_url)
+    if not is_iosxe_package(install_url):
+        log(3, '%s is not valid image file' % install_url)
+        shutdown(save=False, abnormal=True)
+
+    # change boot mode if device is in bundle mode
+    if 'bundle' in version:
+        fs = 'bootflash:' if is_rtr else 'flash:'
+        log(6, 'Changing the Boot Mode')
+        cli.configure('''no boot system
+            boot system {}packages.conf'''.format(fs))
+        cli.execute('write memory')
+        cli.execute('write erase')
 
     # Configure EEM applet for interactive command execution
     cli.configure('''event manager applet upgrade
-        event none maxrun 600
+        event none maxrun 900
         action 1.0 cli command "enable"
-        action 2.0 cli command "install add file %s activate commit" pattern "re-enter the command"
-        action 2.1 cli command "n" pattern "you want to proceed"
-        action 2.2 cli command "y"''' % dest_file)
+        action 2.0 syslog msg "Removing inactive images..."
+        action 3.0 cli command "install remove inactive" pattern "\[y\/n\]|#"
+        action 3.1 cli command "y"
+        action 4.0 syslog msg "Downloading and installing image..."
+        action 5.0 cli command "install add file %s activate commit" pattern "\[y\/n\/q\]|#"
+        action 5.1 cli command "n" pattern "\[y\/n\]|#"
+        action 5.2 cli command "y"
+        action 6.0 syslog msg "Reloading stack..."
+        action 7.0 reload''' % install_url)
     return True
 
 def autoupgrade():
     """ Returns True if autoupgrade script is configured or False otherwise """
-    try:
-        switch = cli.execute('show switch')
-    except cli.CLISyntaxError:
-        return False
-
+    switch = cli.execute('show switch')
     # look for a switch in version mismatch state
     if switch.find('V-Mismatch') > -1:
         # Workaround to execute interactive marked commands from guestshell
@@ -210,10 +263,8 @@ def apply_config(variables, base_url, config_url, template):
     try:
         cli.configure(conf)
     except cli.CLIConfigurationError as e:
-        log(3, 'Failed configurations:')
-        for failure in e.failed:
-            log(3, failure)
-        shutdown(False)  # terminate script
+        log(3, 'Failed configurations:\n' + '\n'.join(map(str, e.failed)))
+        shutdown(save=False, abnormal=True)  # terminate script
     else:
         return True
 
@@ -261,7 +312,7 @@ class Stack():
 def main():
     # setup IOS syslog for our own messages if server IP is specified
     if SYSLOG:
-        cli.configure('''logging discriminator ztp msg-body includes Message from|HA_EM
+        cli.configure('''logging discriminator ztp msg-body includes Message from|HA_EM|INSTALL
             logging host %s discriminator ztp''' % SYSLOG)
         time.sleep(2)
 
@@ -278,26 +329,25 @@ def main():
         data = DATA + json.loads(json_str) if len(json_str) else DATA
     except ValueError as e:
         log(3, e)
-        shutdown(False)  # malformed data; terminate script
+        shutdown(save=False, abnormal=True)  # malformed data; terminate script
 
-    # lookup stack in dataset, if not found turn on beacon and quit script
+    # lookup stack in dataset, if not found turn on beacon
     my = Stack(data, serials)
     if my.stack is None:
-        log(3, '% Stack not found in dataset')
+        log(4, '% Stack not found in dataset')
         blue_beacon(serials.keys())
-        shutdown(False)
+    else:
+        # check if all specified switches are found, turn on beacon if not
+        missing = set(my.stack.values()) - set(serials.values())
+        if len(missing):
+            log(4, 'Missing switch(es): %s' % ', '.join(missing))
+            blue_beacon(serials.keys())
 
-    # check if all specified switches are found, turn on beacon if not
-    missing = set(my.stack.values()) - set(serials.values())
-    if len(missing):
-        log(4, 'Missing switch(es): %s' % ', '.join(missing))
-        blue_beacon(serials.keys())
-
-    # check if all found switches are specified, turn on beacon if not
-    extra = set(serials.values()) - set(my.stack.values())
-    if len(extra):
-        log(4, 'Extra switch(es): %s' % ', '.join(extra))
-        blue_beacon(serials.keys())
+        # check if all found switches are specified, turn on beacon if not
+        extra = set(serials.values()) - set(my.stack.values())
+        if len(extra):
+            log(4, 'Extra switch(es): %s' % ', '.join(extra))
+            blue_beacon(serials.keys())
 
     is_rtr = 0 in serials
     # first, check version and install software if needed
@@ -306,7 +356,7 @@ def main():
         cli.execute('event manager run upgrade')
     else:
         # second, check v-mismatch and perform autoupgrade if needed
-        if autoupgrade():
+        if not is_rtr and autoupgrade():
             log(6, 'V-Mismatch detected, upgrade starting asynchronously...')
             cli.execute('event manager run upgrade')
         else:
@@ -326,7 +376,7 @@ def main():
 
                 # cleanup after step 4 or 5 and save config if specified
                 log(6, 'End of workflow reached')
-                shutdown(my.save)
+                shutdown(save=my.save, abnormal=False)
 
 if __name__ == "__main__":
     main()

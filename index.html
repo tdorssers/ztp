@@ -16,11 +16,19 @@
         <p>Stacks</p>
         <div id="stacks"></div>
         <form id="form_import">
-            <input type="button" value="Add Stack" onclick="addTable()" />
-            <input type="button" value="Submit" onclick="submitData(false)" />
-			<input type="button" value="Export" onclick="submitData(true)" />
-			<input type="button" value="Import" onclick="document.getElementById('hiddenfile').click()" />
-			<input type="file" id="hiddenfile" style="display:none;" onchange="importCsv()" />
+			<table class="wide">
+				<tr>
+					<td>
+						<input type="button" value="Add Stack" onclick="addTable()" />
+						<input type="button" value="Submit" onclick="submitData(false)" />
+					</td>
+					<td class="right">
+						<input type="button" value="Export" onclick="submitData(true)" />
+						<input type="button" value="Import" onclick="document.getElementById('hiddenfile').click()" />
+						<input type="file" id="hiddenfile" style="display:none;" onchange="importCsv()" />
+					</td>
+				</tr>
+			</table>
         </form>
         <p>Files</p>
         <form id="form_upload" class="box">

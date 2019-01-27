@@ -26,6 +26,9 @@ td.min {
     width: 1%;
     white-space: nowrap;
 }
+td.right {
+	text-align: right;
+}
 tr.center {
     text-align: center;
 }
