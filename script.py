@@ -68,11 +68,11 @@ def get_serials():
     serials = {}
     for node in doc.getElementsByTagName('InventoryEntry'):
         chassis = node.getElementsByTagName('ChassisName')[0]
-        # router
+        # non-stackable
         if chassis.firstChild.data == '"Chassis"':
             serials[0] = node.getElementsByTagName('SN')[0].firstChild.data
 
-        # switch
+        # stackable
         match = re.match('"Switch ([0-9])"', chassis.firstChild.data)
         if match:
             unit = int(match.group(1))
@@ -166,7 +166,7 @@ def renumber_stack(stack, serials):
 
     return renumber
 
-def install(version, required, base_url, install_url, is_rtr):
+def install(version, required, base_url, install_url, is_chassis):
     """ Returns True if install script is configured or False otherwise """
     # remove leading zeros from required version numbers and compare
     if (required is None or install_url is None
@@ -182,12 +182,17 @@ def install(version, required, base_url, install_url, is_rtr):
 
     # change boot mode if device is in bundle mode
     if 'bundle' in version:
-        fs = 'bootflash:' if is_rtr else 'flash:'
+        fs = 'bootflash:' if is_chassis else 'flash:'
         log(6, 'Changing the Boot Mode')
         cli.configure('''no boot system
             boot system {}packages.conf'''.format(fs))
         cli.execute('write memory')
         cli.execute('write erase')
+        # install command needs confirmation on changed boot config
+        confirm_bm = '''pattern "\[y\/n\]|#"
+            action 5.3 cli command "y"'''
+    else:
+        confirm_bm = ''
 
     # Configure EEM applet for interactive command execution
     cli.configure('''event manager applet upgrade
@@ -199,9 +204,9 @@ def install(version, required, base_url, install_url, is_rtr):
         action 4.0 syslog msg "Downloading and installing image..."
         action 5.0 cli command "install add file %s activate commit" pattern "\[y\/n\/q\]|#"
         action 5.1 cli command "n" pattern "\[y\/n\]|#"
-        action 5.2 cli command "y"
+        action 5.2 cli command "y" %s
         action 6.0 syslog msg "Reloading stack..."
-        action 7.0 reload''' % install_url)
+        action 7.0 reload''' % (install_url, confirm_bm))
     return True
 
 def autoupgrade():
@@ -349,20 +354,20 @@ def main():
             log(4, 'Extra switch(es): %s' % ', '.join(extra))
             blue_beacon(serials.keys())
 
-    is_rtr = 0 in serials
+    is_chassis = 0 in serials
     # first, check version and install software if needed
-    if install(version, my.version, my.base_url, my.install, is_rtr):
+    if install(version, my.version, my.base_url, my.install, is_chassis):
         log(6, 'Software upgrade starting asynchronously...')
         cli.execute('event manager run upgrade')
     else:
         # second, check v-mismatch and perform autoupgrade if needed
-        if not is_rtr and autoupgrade():
+        if not is_chassis and autoupgrade():
             log(6, 'V-Mismatch detected, upgrade starting asynchronously...')
             cli.execute('event manager run upgrade')
         else:
             log(6, 'No software upgrade required')
             # third, check switch numbering and renumber stack if needed
-            if not is_rtr and renumber_stack(my.stack, serials):
+            if not is_chassis and renumber_stack(my.stack, serials):
                 log(6, 'Stack renumbered, reloading stack...')
                 cli.execute('reload')
             else:

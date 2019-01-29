@@ -102,10 +102,27 @@ Call | Description
 
 ## Installation
 
-Configure a DHCP server to serve a range with option 67 set to: `http://x.x.x.x:8080/file/script.py`, where x.x.x.x is the IP address of the machine hosting `app.py`.
+Configure a DHCP server to serve a range with option 67 set to: `http://x.x.x.x:8080/file/script.py`, where x.x.x.x is the IP address of the machine hosting `app.py`. Sample configuration on a Cisco device:
+```
+ip dhcp excluded-address 10.0.0.1
+ip dhcp pool ztp_pool
+ network 10.0.0.0 255.255.255.0
+ default-router 10.0.0.1
+ option 67 ascii http://10.0.0.1:8080/file/script.py
+```
 
-Install Bottle and Waitress, put `app.py`, `index.html`, `main.js`, `style.css` and `script.py` and optional IOS-XE images and configuration files in a directory and start the server backend on Linux as follows:
+Install Bottle and Waitress using [PIP](https://pypi.org/project/pip/) or on Ubuntu as follows:
+
+`sudo apt-get install python-bottle python-waitress`
+
+Put `app.py`, `index.html`, `main.js`, `style.css` and `script.py` in a directory and start the server backend on Linux as follows:
 
 `nohup python app.py &`
 
-The app can be run on Windows as well.
+The app can be run on Windows as well. Python 2.7 and 3 are supported.
+
+## Testing
+
+The script has been successfully tested on the following platforms:
+- Cisco Catalyst 9300 Series Switches
+- Cisco Catalyst 9400 Series Switches
