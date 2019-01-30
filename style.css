@@ -27,13 +27,13 @@ td.min {
     white-space: nowrap;
 }
 td.right {
-	text-align: right;
+    text-align: right;
 }
 tr.center {
     text-align: center;
 }
 span {
-	font-size: small;
+    font-size: small;
 }
 .progress {
     border: 1px solid #777;

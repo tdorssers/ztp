@@ -1,10 +1,10 @@
 """ ZTP API Web App
 This script implements a simple API to serve the ZTP data object, using the
-Bottle micro web framework and Waitress HTTP server. There is a file serving
+Bottle micro web framework and the Waitress HTTP server. There is a file serving
 and listing API, as well as a CSV import and export API.
-It validates the format of the received data before writing it to file and also
-when the data is read from file. An AJAX web frontend app provides a GUI for
-data entry using these APIs. 
+An AJAX web frontend app provides a GUI for data entry using these APIs. This
+script validates the format of the data for every API call. Error messages of
+failed API calls are presented in the GUI.
 
 Author:  Tim Dorssers
 Version: 1.0
@@ -23,8 +23,13 @@ from collections import OrderedDict
 HIDE = ['app.py', 'data.json', 'index.html', 'main.js', 'style.css', 'script.py']
 
 def log(req):
-    """ Logs request from client """
+    """ Logs request from client to stderr """
     logging.info('%s - %s %s' % (req.remote_addr, req.method, req.path))
+
+def error(msg):
+    """ Sends HTTP 500 with error message string by raising HTTPResponse """
+    raise bottle.HTTPResponse(body=json.dumps(str(msg)), status=500,
+                              headers={'Content-type': 'application/json'})
 
 @bottle.route('/')
 @bottle.route('/<filename>')
@@ -44,9 +49,12 @@ def delete_file(filepath):
     """ Removes specified file """
     log(bottle.request)
     if any(name in filepath for name in HIDE):
-        bottle.abort()
+        error('Cannot remove %s' % filepath)
     else:
-        os.remove(filepath)
+        try:
+            os.remove(filepath)
+        except OSError as e:
+            error(e)
 
 @bottle.post('/file')
 def post_file():
@@ -54,10 +62,13 @@ def post_file():
     log(bottle.request)
     folder = bottle.request.forms.get('folder')
     upload = bottle.request.files.get('upload')
-    if folder and not os.path.exists(folder):
-        os.makedirs(folder)
-
-    upload.save(os.path.join(folder, upload.filename), overwrite=True)
+    try:
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
+    
+        upload.save(os.path.join(folder, upload.filename), overwrite=True)
+    except (OSError, IOError) as e:
+        error(e)
 
 @bottle.route('/list')
 def get_list():
@@ -91,10 +102,17 @@ def get_data():
     bottle.response.set_header('Pragma', 'no-cache')
     bottle.response.set_header('Cache-Control', 'no-cache, no-store, must-revalidate')
     # Load, validate and send JSON data
-    with open('data.json') as infile:  
-        data = json.load(infile, object_pairs_hook=OrderedDict)
-        validate(data)
-        return json.dumps(data)
+    try:
+        if os.path.exists('data.json'):
+            with open('data.json') as infile:  
+                data = json.load(infile, object_pairs_hook=OrderedDict)
+                validate(data)
+                return json.dumps(data)
+        else:
+            return json.dumps([{}])
+
+    except (ValueError, IOError) as e:
+        error(e)
 
 @bottle.post('/data')
 def post_data():
@@ -102,11 +120,14 @@ def post_data():
     log(bottle.request)
     if bottle.request.content_type == 'application/json':
         # Load, validate and write JSON data
-        data = json.loads(bottle.request.body.getvalue(),
-                          object_pairs_hook=OrderedDict)
-        validate(data)
-        with open('data.json', 'w') as outfile:  
-            json.dump(data, outfile, indent=4)
+        try:
+            data = json.loads(bottle.request.body.getvalue(),
+                              object_pairs_hook=OrderedDict)
+            validate(data)
+            with open('data.json', 'w') as outfile:  
+                json.dump(data, outfile, indent=4)
+        except (ValueError, IOError) as e:
+            error(e)
 
 @bottle.get('/csv')
 def get_csv():
@@ -171,9 +192,12 @@ def post_data():
         data.append(cubic)
 
     # Validate and write JSON data
-    validate(data)
-    with open('data.json', 'w') as outfile:  
-        json.dump(data, outfile, indent=4)
+    try:
+        validate(data)
+        with open('data.json', 'w') as outfile:  
+            json.dump(data, outfile, indent=4)
+    except (ValueError, IOError) as e:
+        error(e)
 
 def validate(data):
     """ Validates data and raises ValueError if invalid """

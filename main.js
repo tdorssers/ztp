@@ -4,20 +4,23 @@
  * Version: 1.0
  */
 
-function createDropdown(value) {
+function createDropdown(value, id, callback) {
     // Create block for editable drop-down list
     var div = document.createElement('DIV');
     div.className = 'dropdown';
     // First element is a text box
     var ele = document.createElement('INPUT');
+    ele.id = id;
     ele.type = 'text';
     if (value) ele.value = value;
+    ele.addEventListener('change', callback, false);
     div.appendChild(ele);
     // Second element is a drop-down list
     var ele = document.createElement('SELECT');
     ele.addEventListener('change', function() {
         this.previousElementSibling.value = this.value;
         this.previousElementSibling.focus();
+        if (callback) callback();
     }, false);
     ele.className = 'picker';
     addOptionsFromTable(ele);
@@ -51,6 +54,7 @@ function updateOptionsFromTable() {
 }
 
 function createTableRow(table, object, key) {
+    var id = table.id + '_' + key;
     var row = table.insertRow(-1);
     // First cell is the object key name
     var cell = row.insertCell(-1);
@@ -70,12 +74,20 @@ function createTableRow(table, object, key) {
             if (object[key]) ele.innerHTML = object[key];
             break;
         case 'install':
+            var ele = createDropdown(object[key], id, function () {
+                // Auto fill version input if version can be extracted from file name
+                var version = document.getElementById(table.id + '_version');
+                var match = document.getElementById(id).value.match(/(\d+.\d+.\d+\w?)/g);
+                if (match) version.value = match[0].replace(/\b0+(\d)/g, '$1');
+            });
+            break;
         case 'config':
-            var ele = createDropdown(object[key]);
+            var ele = createDropdown(object[key], id, null);
             break;
         default:
             var ele = document.createElement('INPUT');
             ele.className = 'wide';
+            ele.id = id;
             ele.type = 'text';
             if (object[key]) ele.value = object[key];
     }
@@ -124,13 +136,13 @@ function addRow(button) {
     createNestedTableRow(table, tr.rowIndex + 1, {'':''}, '');
 }
 
-function createNestedTable(table, id, object, key) {
+function createNestedTable(table, object, key) {
     var row = table.insertRow(-1);
     // First cell is the object key name
     row.insertCell(-1).innerHTML = key;
     // Second cell is the nested table
     var ele = document.createElement('TABLE');
-    ele.id = id;
+    ele.id = table.id + '_' + key;
     ele.className = 'wide';
     if (typeof object[key] !== 'undefined' && object[key] !== null) {
         // Create rows if object is not empty
@@ -152,14 +164,14 @@ function createContent(data) {
         table.id = 'table_' + createContent.lastIndex;
         table.className = 'wide';
         if ('stack' in data[index]) {
-            createNestedTable(table, 'table_' + createContent.lastIndex + '_stack', data[index], 'stack');
+            createNestedTable(table, data[index], 'stack');
         } else {
             createTableRow(table, data[index], 'base_url');
         }
         createTableRow(table, data[index], 'version');
         createTableRow(table, data[index], 'install');
         createTableRow(table, data[index], 'config');
-        createNestedTable(table, 'table_' + createContent.lastIndex + '_subst', data[index], 'subst');
+        createNestedTable(table, data[index], 'subst');
         createTableRow(table, data[index], 'save');
         createTableRow(table, data[index], 'cli');
         createTableRow(table, data[index], 'template');
@@ -194,6 +206,14 @@ function removeTable(id) {
 
 function addTable() {
     createContent([{"stack":null}]);
+}
+
+function displayError(xhttp) {
+    if (xhttp.status == 500 && xhttp.getResponseHeader('Content-type') == 'application/json') {
+        alert(JSON.parse(xhttp.responseText));
+    } else if (xhttp.status) {
+        alert(xhttp.statusText);
+    }
 }
 
 function submitData(exportCsv) {
@@ -247,12 +267,12 @@ function submitData(exportCsv) {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-			if (exportCsv && this.status == 200) {
-				window.open('/csv', '_blank');
-			} else if (this.status) {
-				alert(this.statusText);
-			}
-		}
+            if (exportCsv && this.status == 200) {
+                window.open('/csv', '_blank');
+            } else {
+                displayError(this);
+            }
+        }
     };
     xhttp.open("POST", "/data", true);
     xhttp.setRequestHeader("Content-type", "application/json");
@@ -279,6 +299,7 @@ function loadData() {
             } else {
                 // Just display an empty defaults object in case of error
                 createContent([{}]);
+                displayError(this);
             }
         }
     };
@@ -341,7 +362,7 @@ function deleteFile(button) {
                     table.parentNode.removeChild(table);
                 }
             } else {
-                alert(this.statusText);
+                displayError(this);
             }
         }
     };
@@ -389,7 +410,7 @@ function uploadFile(file, i) {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            if (this.status && this.status != 200) alert(this.statusText);
+            if (this.status != 200) displayError(this);
             // Remove progress bar
             tr.parentNode.removeChild(tr);
             if (document.getElementById('table_progress').rows.length == 0) {
@@ -412,13 +433,13 @@ function uploadFile(file, i) {
 
 function importCsv() {
     var data = new FormData();
-	data.append('upload', document.getElementById('hiddenfile').files[0]);
-	xhttp = new XMLHttpRequest();
+    data.append('upload', document.getElementById('hiddenfile').files[0]);
+    xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status) alert(this.statusText);
+        if (this.readyState == 4) displayError(this);
     };
     xhttp.open("POST", "/csv", true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send(data);
-	document.getElementById('form_import').reset();
+    document.getElementById('form_import').reset();
 }

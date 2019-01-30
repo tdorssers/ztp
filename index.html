@@ -16,41 +16,41 @@
         <p>Stacks</p>
         <div id="stacks"></div>
         <form id="form_import">
-			<table class="wide">
-				<tr>
-					<td>
-						<input type="button" value="Add Stack" onclick="addTable()" />
-						<input type="button" value="Submit" onclick="submitData(false)" />
-					</td>
-					<td class="right">
-						<input type="button" value="Export" onclick="submitData(true)" />
-						<input type="button" value="Import" onclick="document.getElementById('hiddenfile').click()" />
-						<input type="file" id="hiddenfile" style="display:none;" onchange="importCsv()" />
-					</td>
-				</tr>
-			</table>
+            <table class="wide">
+                <tr>
+                    <td>
+                        <input type="button" value="Add Stack" onclick="addTable()" />
+                        <input type="button" value="Submit" onclick="submitData(false)" />
+                    </td>
+                    <td class="right">
+                        <input type="button" value="Export" onclick="submitData(true)" />
+                        <input type="button" value="Import" onclick="document.getElementById('hiddenfile').click()" />
+                        <input type="file" id="hiddenfile" style="display:none;" onchange="importCsv()" />
+                    </td>
+                </tr>
+            </table>
         </form>
         <p>Files</p>
         <form id="form_upload" class="box">
             <div id="files"></div>
-			<table class="wide">
-				<tr class="center">
-					<td>local path</td>
-					<td>remote path</td>
-				</tr>
-				<tr>
-					<td>
-						<input type="file" class="wide" id="browse" multiple="" />
-					</td>
-					<td>
-						<input type="text" class="wide" id="folder" />
-					</td>
-					<td class="min">
-						<input type="button" value="Upload" onclick="upload()" />
-					</td>
-				</tr>
-			</table>
-			<table id="table_progress" class="wide"></table>
+            <table class="wide">
+                <tr class="center">
+                    <td>local path</td>
+                    <td>remote path</td>
+                </tr>
+                <tr>
+                    <td>
+                        <input type="file" class="wide" id="browse" multiple="" />
+                    </td>
+                    <td>
+                        <input type="text" class="wide" id="folder" />
+                    </td>
+                    <td class="min">
+                        <input type="button" value="Upload" onclick="upload()" />
+                    </td>
+                </tr>
+            </table>
+            <table id="table_progress" class="wide"></table>
         </form>
         &nbsp;
     </body>
