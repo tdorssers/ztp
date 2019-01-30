@@ -96,7 +96,7 @@ Call | Description
 *GET /csv* | upon receiving the request, the server flattens the dataset and exports it as a CSV file
 *POST /csv* | the client sends the CSV file with the flattened dataset to the server for importing
 
-*app.py* validates the format of the data for every API call. Error messages of failed API calls are presented in the GUI, by returnin HTTP status code 500 with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
+*app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
 
 *main.js* displays text boxes for every key value in the DATA list of dicts. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS-XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files.
 
