@@ -15,16 +15,19 @@ import os
 import csv
 import sys
 import json
+import time
 import bottle
 import codecs
 import logging
 from collections import OrderedDict
 
-HIDE = ['app.py', 'data.json', 'index.html', 'main.js', 'style.css', 'script.py']
+HIDE = ['app.py', 'data.json', 'index.html', 'main.js', 'status.json',
+        'style.css', 'script.py']
 
 def log(req):
     """ Logs request from client to stderr """
-    logging.info('%s - %s %s' % (req.remote_addr, req.method, req.path))
+    qs = '?' + req.query_string if len(req.query_string) else ''
+    logging.info('%s - %s %s%s' % (req.remote_addr, req.method, req.path, qs))
 
 def error(msg):
     """ Sends HTTP 500 with error message string by raising HTTPResponse """
@@ -65,7 +68,7 @@ def post_file():
     try:
         if folder and not os.path.exists(folder):
             os.makedirs(folder)
-    
+
         upload.save(os.path.join(folder, upload.filename), overwrite=True)
     except (OSError, IOError) as e:
         error(e)
@@ -89,7 +92,8 @@ def get_list():
     bottle.response.content_type = 'application/json'
     bottle.response.expires = 0
     bottle.response.set_header('Pragma', 'no-cache')
-    bottle.response.set_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    bottle.response.set_header('Cache-Control',
+                               'no-cache, no-store, must-revalidate')
     return json.dumps(flist)
 
 @bottle.get('/data')
@@ -100,11 +104,12 @@ def get_data():
     bottle.response.content_type = 'application/json'
     bottle.response.expires = 0
     bottle.response.set_header('Pragma', 'no-cache')
-    bottle.response.set_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    bottle.response.set_header('Cache-Control',
+                               'no-cache, no-store, must-revalidate')
     # Load, validate and send JSON data
     try:
         if os.path.exists('data.json'):
-            with open('data.json') as infile:  
+            with open('data.json') as infile:
                 data = json.load(infile, object_pairs_hook=OrderedDict)
                 validate(data)
                 return json.dumps(data)
@@ -124,7 +129,7 @@ def post_data():
             data = json.loads(bottle.request.body.getvalue(),
                               object_pairs_hook=OrderedDict)
             validate(data)
-            with open('data.json', 'w') as outfile:  
+            with open('data.json', 'w') as outfile:
                 json.dump(data, outfile, indent=4)
         except (ValueError, IOError) as e:
             error(e)
@@ -132,7 +137,8 @@ def post_data():
 @bottle.get('/csv')
 def get_csv():
     """ Converts JSON file to CSV and sends it to web server """
-    with open('data.json') as infile:  
+    log(bottle.request)
+    with open('data.json') as infile:
         data = json.load(infile, object_pairs_hook=OrderedDict)
         validate(data)
         # Flatten JSON data
@@ -161,8 +167,12 @@ def get_csv():
         writer.writerows(flat_data)
         # Prepare response header
         bottle.response.content_type = 'text/csv'
+        bottle.response.expires = 0
+        bottle.response.set_header('Pragma', 'no-cache')
+        bottle.response.set_header('Cache-Control',
+                                   'no-cache, no-store, must-revalidate')
         bottle.response.set_header('Content-Disposition',
-                                   'attachment; filename="export.csv"');
+                                   'attachment; filename="export.csv"')
         return csvbuf.getvalue()
 
 @bottle.post('/csv')
@@ -194,8 +204,55 @@ def post_data():
     # Validate and write JSON data
     try:
         validate(data)
-        with open('data.json', 'w') as outfile:  
+        with open('data.json', 'w') as outfile:
             json.dump(data, outfile, indent=4)
+    except (ValueError, IOError) as e:
+        error(e)
+
+@bottle.get('/log')
+def log_get():
+    log(bottle.request)
+    logbuf = []
+    try:
+        if os.path.exists('status.json'):
+            with open('status.json') as infile:
+                logbuf = json.load(infile)
+    except (ValueError, IOError) as e:
+        error(e)
+
+    # Prepare response header
+    bottle.response.content_type = 'application/json'
+    bottle.response.expires = 0
+    bottle.response.set_header('Pragma', 'no-cache')
+    bottle.response.set_header('Cache-Control',
+                               'no-cache, no-store, must-revalidate')
+    # Update log buffer from URL parameter or send log buffer if no parameter 
+    if 'msg' in bottle.request.query:
+        try:
+            msg = json.loads(bottle.request.query.msg)
+            if not isinstance(msg, dict):
+                error('Expected JSON object')
+
+            msg['ip'] = bottle.request.remote_addr
+            msg['time'] = time.strftime('%x %X')
+            logbuf.append(msg)
+            # Write log buffer to file
+            with open('status.json', 'w') as outfile:
+                json.dump(logbuf, outfile, indent=4)
+        except (ValueError, IOError) as e:
+            error(e)
+
+        return '\n'
+    else:
+        return json.dumps(logbuf)
+
+@bottle.delete('/log')
+def log_delete():
+    log(bottle.request)
+    # Just write empty list to file
+    try:
+        with open('status.json', 'w') as outfile:
+            json.dump([], outfile)
     except (ValueError, IOError) as e:
         error(e)
 
@@ -211,6 +268,9 @@ def validate(data):
 
         if 'stack' in my and not isinstance(my['stack'], OrderedDict):
             raise ValueError('Stack must be JSON object')
+
+        if 'subst' in my and not isinstance(my['subst'], OrderedDict):
+            raise ValueError('Subst must be JSON object')
 
         num_obj = [len(v) for v in my.values() if isinstance(v, OrderedDict)]
         if 0 in num_obj:

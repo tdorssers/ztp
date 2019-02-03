@@ -69,7 +69,6 @@ function createTableRow(table, object, key) {
             break;
         case 'template':
             var ele = document.createElement('TEXTAREA');
-            ele.className = 'wide';
             ele.rows = 5;
             if (object[key]) ele.innerHTML = object[key];
             break;
@@ -77,8 +76,8 @@ function createTableRow(table, object, key) {
             var ele = createDropdown(object[key], id, function () {
                 // Auto fill version input if version can be extracted from file name
                 var version = document.getElementById(table.id + '_version');
-                var match = document.getElementById(id).value.match(/(\d+.\d+.\d+\w?)/g);
-                if (match) version.value = match[0].replace(/\b0+(\d)/g, '$1');
+                var match = /\.(\d+.\d+.\d+\w?)\./g.exec(document.getElementById(id).value);
+                if (match) version.value = match[1].replace(/\b0+(\d)/g, '$1');
             });
             break;
         case 'config':
@@ -86,7 +85,6 @@ function createTableRow(table, object, key) {
             break;
         default:
             var ele = document.createElement('INPUT');
-            ele.className = 'wide';
             ele.id = id;
             ele.type = 'text';
             if (object[key]) ele.value = object[key];
@@ -107,7 +105,6 @@ function createCellWithButton(row, name, callback, id) {
 
 function createCellWithText(row, value, readOnly) {
     var ele = document.createElement('INPUT');
-    ele.className = 'wide';
     ele.type = 'text';
     ele.value = value;
     ele.readOnly = readOnly;
@@ -143,7 +140,6 @@ function createNestedTable(table, object, key) {
     // Second cell is the nested table
     var ele = document.createElement('TABLE');
     ele.id = table.id + '_' + key;
-    ele.className = 'wide';
     if (typeof object[key] !== 'undefined' && object[key] !== null) {
         // Create rows if object is not empty
         for (var i in object[key]) {
@@ -162,7 +158,6 @@ function createContent(data) {
         var table = document.createElement('TABLE');
         // Table ID is used later to recontruct the array of objects
         table.id = 'table_' + createContent.lastIndex;
-        table.className = 'wide';
         if ('stack' in data[index]) {
             createNestedTable(table, data[index], 'stack');
         } else {
@@ -267,11 +262,8 @@ function submitData(exportCsv) {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            if (exportCsv && this.status == 200) {
-                window.open('/csv', '_blank');
-            } else {
-                displayError(this);
-            }
+            // Open URL if exporting to CSV, otherwise display HTTP status
+            (exportCsv && this.status == 200) ? window.open('/csv', '_blank') : displayError(this);
         }
     };
     xhttp.open("POST", "/data", true);
@@ -323,7 +315,6 @@ function loadList() {
             var files = JSON.parse(this.responseText);
             // Create table with file list
             var table = document.createElement('TABLE');
-            table.className = 'wide';
             table.id = 'table_file';
             if (files.length) {
                 var row = table.insertRow(-1);
@@ -436,10 +427,71 @@ function importCsv() {
     data.append('upload', document.getElementById('hiddenfile').files[0]);
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) displayError(this);
+        if (this.readyState == 4) {
+            // Reload page when import was successful, otherwise display error
+            (this.status == 200) ? window.location.reload(false) : displayError(this);
+        }
     };
     xhttp.open("POST", "/csv", true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send(data);
     document.getElementById('form_import').reset();
+}
+
+function loadLog() {
+    // Remove log entry table
+    var table = document.getElementById('table_log');
+    if (table !== null) table.parentNode.removeChild(table);
+    // Display modal frame
+    var modal = document.getElementById('modal');
+    modal.style.display = 'block';
+    window.onclick = function(event) {
+        if (event.target == modal) modal.style.display = "none";
+    };
+    xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            if (this.status == 200) {
+                var log = document.getElementById('log');
+                // Parse retrieved JSON data
+                var entries = JSON.parse(this.responseText);
+                // Create table with log entries
+                var table = document.createElement('TABLE');
+                table.id = 'table_log';
+                var row = table.insertRow(-1);
+                ['ip', 'time', 'serial', 'version', 'status'].forEach(function(key) {
+                    var cell = document.createElement('TH');
+                    cell.innerHTML = key;
+                    row.appendChild(cell);
+                });
+                for (var index in entries) {
+                    var row = table.insertRow(-1);
+                    row.insertCell(-1).innerHTML = entries[index]['ip'];
+                    row.insertCell(-1).innerHTML = entries[index]['time'];
+                    row.insertCell(-1).innerHTML = entries[index]['serial'];
+                    row.insertCell(-1).innerHTML = entries[index]['version'];
+                    row.insertCell(-1).innerHTML = entries[index]['status'];
+                }
+                log.appendChild(table);
+            } else {
+                displayError(this);
+            }
+        }
+    };
+    xhttp.open("GET", "/log", true);
+    xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhttp.send();
+}
+
+function clearLog() {
+    xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            // Reload log entries when clear was successful, otherwise display error
+            (this.status == 200) ? loadLog() : displayError(this);
+        }
+    };
+    xhttp.open("DELETE", "/log", true);
+    xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhttp.send();
 }

@@ -26,12 +26,14 @@ from string import Template
 from xml.dom import minidom
 try:
     from urlparse import urljoin
+    from urllib import quote_plus
 except ImportError:
-    from urllib.parse import urljoin
+    from urllib.parse import urljoin, quote_plus
 
 ##### CONSTANTS ################################################################
 
 SYSLOG = '10.0.0.1'  # Syslog IP address string, empty string disables syslog
+LOGAPI = 'http://10.0.0.1:8080/log'  # URL to log API, empty string disables
 
 # JSON is a string with URL of the JSON encoded DATA object as specified below.
 # Empty string disables downloading of external device data.
@@ -89,8 +91,7 @@ def is_iosxe_package(url):
         log(3, match.group(1))
         shutdown(save=False, abnormal=True)
 
-    match = re.search('type is (.*)', info)
-    return 'IOSXE_PACKAGE' in match.group(1) if match else False
+    return bool(re.search('IFS|NOVA|IOSXE_PACKAGE', info))
 
 def get_version():
     """ Returns a string with the IOS version """
@@ -124,37 +125,41 @@ def renumber_stack(stack, serials):
     if stack is None:
         return False
 
+    # get current switch number and priorities as list of tuples
+    switch = cli.execute('show switch')
+    match = re.findall('(\d)\s+\S+\s+\S+\s+(\d+)', switch)
     # renumber switches
     renumber = False
     for old_num in serials:
-        for new_num in stack:
-            if serials[old_num] == stack[new_num] and old_num != int(new_num):
-                renumber = True
-                # renumber switch and log error message in case of failure
-                try:
-                    cli.execute('switch {} renumber {}'.format(old_num, new_num))
-                    log(6, 'Renumbered switch {} to {}'.format(old_num, new_num))
-                except cli.CLISyntaxError as e:
-                    log(3, e)
-                    shutdown(save=False, abnormal=True)  # terminate script
-
-    # set switch priorities
-    switch = cli.execute('show switch')
-    match = re.findall('(\d)\s+\S+\s+\S+\s+(\d+)', switch)
-    for num, old_prio in match:
-        new_prio = 16 - int(num)
-        if (int(old_prio) != new_prio):
-            # check if top switch is not active
-            if switch.find('*{}'.format(sorted(serials.keys())[0])) == -1:
-                renumber = True
-
-            # set switch priority and log error message in case of failure
+        # lookup new switch number
+        new_num = next((n for n in stack if serials[old_num] == stack[n]), None)
+        if new_num and old_num != int(new_num):
+            renumber = True
+            # renumber switch and log error message in case of failure
             try:
-                cli.execute('switch %s priority %d' % (num, new_prio))
-                log(6, 'Switch %s priority set to %d' % (num, new_prio))
+                cli.execute('switch {} renumber {}'.format(old_num, new_num))
+                log(6, 'Renumbered switch {} to {}'.format(old_num, new_num))
             except cli.CLISyntaxError as e:
                 log(3, e)
                 shutdown(save=False, abnormal=True)  # terminate script
+
+        if new_num:
+            # calculate new switch priority
+            new_prio = 16 - int(new_num)
+            # lookup current switch priority
+            old_prio = next((p for n, p in match if int(n) == old_num), None)
+            if int(old_prio) != new_prio:
+                # check if top switch is not active
+                if switch.find('*{}'.format(sorted(serials.keys())[0])) == -1:
+                    renumber = True
+
+                # set switch priority and log error message in case of failure
+                try:
+                    cli.execute('switch %s priority %d' % (old_num, new_prio))
+                    log(6, 'Switch %s priority set to %d' % (old_num, new_prio))
+                except cli.CLISyntaxError as e:
+                    log(3, e)
+                    shutdown(save=False, abnormal=True)  # terminate script
 
     if renumber:
         for num in serials.keys():
@@ -300,7 +305,7 @@ def final_cli(command):
         return False
 
 class Stack():
-    """ Access to stack attributes with defaults, returns None if not found """
+    """ Object with matching device data. Provides attribute-like access """
     def __init__(self, data, serials):
         """ Initializes object with data and serials """
         # absence of stack key indicates defaults dict
@@ -313,6 +318,16 @@ class Stack():
     def __getattr__(self, name):
         """ x.__getattr__(y) <==> x.y """
         return self.stack_dict.get(name, self.defaults.get(name, None))
+
+def status(**kwargs):
+    """ Encodes given named arguments and sends them to the log API """
+    if LOGAPI:
+        msg = quote_plus(json.dumps(kwargs))
+        result = cli.execute('show file information %s?msg=%s' % (LOGAPI, msg))
+        # log error message in case of failure
+        match = re.match('^(%Error .*)', result)
+        if match:
+            log(3, match.group(1))
 
 def main():
     # setup IOS syslog for our own messages if server IP is specified
@@ -355,20 +370,24 @@ def main():
             blue_beacon(serials.keys())
 
     is_chassis = 0 in serials
+    first_serial = next(iter(my.stack.values()))
     # first, check version and install software if needed
     if install(version, my.version, my.base_url, my.install, is_chassis):
         log(6, 'Software upgrade starting asynchronously...')
+        status(serial=first_serial, version=version, status='Upgrading')
         cli.execute('event manager run upgrade')
     else:
         # second, check v-mismatch and perform autoupgrade if needed
         if not is_chassis and autoupgrade():
             log(6, 'V-Mismatch detected, upgrade starting asynchronously...')
+            status(serial=first_serial, version=version, status='Upgrading')
             cli.execute('event manager run upgrade')
         else:
             log(6, 'No software upgrade required')
             # third, check switch numbering and renumber stack if needed
             if not is_chassis and renumber_stack(my.stack, serials):
                 log(6, 'Stack renumbered, reloading stack...')
+                status(serial=first_serial, version=version, status='Renumbered')
                 cli.execute('reload')
             else:
                 log(6, 'No need to renumber stack')
@@ -381,6 +400,7 @@ def main():
 
                 # cleanup after step 4 or 5 and save config if specified
                 log(6, 'End of workflow reached')
+                status(serial=first_serial, version=version, status='Finished')
                 shutdown(save=my.save, abnormal=False)
 
 if __name__ == "__main__":

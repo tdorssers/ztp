@@ -23,8 +23,9 @@ The Python script has the following functionality built-in:
 
 ## Using
 
-*script.py* needs 3 variables to be filled in by the user:
+*script.py* needs 4 variables to be filled in by the user:
 - SYSLOG is an IP address string of the syslog server, an empty string disables syslog
+- LOGAPI is a string with URL to log API, an empty string disables status messaging
 - JSON is a string with URL of the JSON encoded DATA object as specified below. Empty string disables downloading of external device data.
 - DATA is a list of dicts that defines device data. Empty list disables the internal data of the script. To specify device defaults, omit the key named *stack* from one dict. Valid keys and values are:
 
@@ -44,6 +45,7 @@ Default settings are inherited by all stacks, but stack settings have preference
 
 ```python
 SYSLOG = '10.0.0.1'
+LOGAPI = ''
 JSON = ''
 DATA = [{
         'version': '16.6.5',
@@ -71,6 +73,7 @@ Instead of entering the data directly into *script.py*, the GUI app can be used 
 
 ```python
 SYSLOG = '10.0.0.1'
+LOGAPI = 'http://10.0.0.1:8080/log'
 JSON = 'http://10.0.0.1:8080/data'
 DATA = []
 ```
@@ -95,6 +98,8 @@ Call | Description
 *POST /data* | the client sends the dataset as JSON text to the server using the HTML POST method
 *GET /csv* | upon receiving the request, the server flattens the dataset and exports it as a CSV file
 *POST /csv* | the client sends the CSV file with the flattened dataset to the server for importing
+*GET /log* | upon receiving the request, the server sends the log entries as JSON text to the client
+*GET /log?msg=<status>* | used by the switch to send ZTP workflow status as JSON text to the server
 
 *app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
 
@@ -125,6 +130,11 @@ The app can be run on Windows as well. Python 2.7 and 3 are supported.
 
 ## Testing
 
-The script has been successfully tested on the following platforms:
+The script has been successfully tested on the following platforms running 16.6.x and higher software:
 - Cisco Catalyst 9300 Series Switches
 - Cisco Catalyst 9400 Series Switches
+- Cisco Catalyst 9500 Series Switches
+
+The following platforms have known issues with 16.6.x software that are resolved in 16.8.x and higher software:
+- Cisco Catalyst 3650 Series Switches
+- Cisco Catalyst 3850 Series Switches

@@ -16,7 +16,7 @@ body {
     border: 1px solid #ddd;
     padding: 5px;
 }
-.wide {
+table, input[type=text], input[type=file], textarea {
     width: 100%;
 }
 td {
@@ -59,4 +59,42 @@ span {
 .dropdown input {
     position: absolute;
     width: calc(100% - 20px);
+}
+#modal {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+}
+#modal .content {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    position: absolute;
+    height: 75%;
+    width: 75%;
+    background-color: #fff;
+    padding: 20px;
+    border: 1px solid #777;
+}
+#modal .scrollable {
+    max-height: calc(100% - 100px);
+    overflow-y: auto;
+}
+#modal .close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+#modal .close:hover, #modal .close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+}
+#table_log tr:nth-child(even) {
+    background-color: #eee;
 }
