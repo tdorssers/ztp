@@ -1,13 +1,15 @@
+[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/tdorssers/ztp)
+
 # Zero Touch Provisioning
 
-Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/169/b_169_programmability_cg/zero_touch_provisioning.html) on IOS-XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
+Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/169/b_169_programmability_cg/zero_touch_provisioning.html) on IOS XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
 
 ![](media/ztp.png)
 
 ## Overview
 
 The Python script has the following functionality built-in:
-- Downloads and installs IOS-XE software from a given URL, if needed
+- Downloads and installs IOS XE software from a given URL, if needed
 - Changes Boot Mode to installed, if device is in bundled boot mode
 - Performs stack renumbering, based on a specified list of serial numbers and switch numbers
 - Sets switch priorities, highest priority on the top switch
@@ -41,7 +43,7 @@ The Python script has the following functionality built-in:
   *save* | boolean to indicate to save configuration at script completion
   *template* | string holding configuration template with $-based placeholders
 
-Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS-XE images and configurations can be served by any HTTP server. Example configuration of *script.py*:
+Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS XE images and configurations can be served by any HTTP server. Example configuration of *script.py*:
 
 ```python
 SYSLOG = '10.0.0.1'
@@ -90,7 +92,7 @@ The API calls or routes provided by *app.py* are:
 
 Call | Description
 --- | ---
-*GET /file/<name>* | used to serve files and subdirectories, such as IOS-XE images or configurations
+*GET /file/<name>* | used to serve files and subdirectories, such as IOS XE images or configurations
 *DELETE /file/<name>* | the request removes the specified file from disk
 *POST /file* | used by the AJAX client form to upload a file to the server 
 *GET /list* | the server sends a JSON text list of all files in the script directory and subdirectories 
@@ -103,7 +105,7 @@ Call | Description
 
 *app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
 
-*main.js* displays text boxes for every key value in the DATA list of dicts. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS-XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files.
+*main.js* displays text boxes for every key value in the DATA list of dicts. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files.
 
 ![](media/gui.png)
 
