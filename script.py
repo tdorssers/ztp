@@ -12,7 +12,7 @@ Supported platforms, software versions and other details can be found at:
 https://cs.co/ztp_provisioning
 
 Author:  Tim Dorssers
-Version: 1.0
+Version: 1.1
 """
 
 import os
@@ -26,9 +26,8 @@ from string import Template
 from xml.dom import minidom
 try:
     from urlparse import urljoin
-    from urllib import quote_plus
 except ImportError:
-    from urllib.parse import urljoin, quote_plus
+    from urllib.parse import urljoin
 
 ##### CONSTANTS ################################################################
 
@@ -53,10 +52,32 @@ JSON = 'http://10.0.0.1:8080/data'
 # 'template': string holding configuration template with $-based placeholders
 DATA = []
 
+##### GLOBALS ##################################################################
+
+ztp = dict(logbuf='')
+
+##### CLASSES ##################################################################
+
+class Stack():
+    """ Object with matching device data. Provides attribute-like access """
+    def __init__(self, data, serials):
+        """ Initializes object with data and serials """
+        # absence of stack key indicates defaults dict
+        self.defaults = next((dct for dct in data if not 'stack' in dct), {})
+        # find dict with at least one common serial number in stack dict
+        self.stack_dict = next((dct for dct in data if 'stack' in dct
+                                and len(set(dct['stack'].values())
+                                        & set(serials.values()))), {})
+
+    def __getattr__(self, name):
+        """ x.__getattr__(y) <==> x.y """
+        return self.stack_dict.get(name, self.defaults.get(name, None))
+
 ##### FUNCTIONS ################################################################
 
 def log(severity, message):
     """ Sends string representation of message to stdout and IOS logging """
+    ztp['logbuf'] += '\n' + str(message)
     print('\n%s' % str(message))
     sys.stdout.flush()  # force writing everything in the buffer to the terminal
     if SYSLOG:
@@ -83,7 +104,7 @@ def get_serials():
     return serials
 
 def is_iosxe_package(url):
-    """ Returns True if the given file is an IOS-XE package """
+    """ Returns True if the given file is an IOS XE package """
     info = cli.execute('show file information %s' % url)
     # log error message if any and terminate script in case of failure
     match = re.match('^(%Error .*)', info)
@@ -106,10 +127,34 @@ def get_version():
     ver_str += ' bundle' if match and is_iosxe_package(match.group(1)) else ''
     return ver_str
 
+def upload(**kwargs):
+    """ Adds given named arguments to dict and sends data to log API """
+    ztp.update(kwargs)
+    if LOGAPI:
+        log(6, 'Storing %s...' % LOGAPI)
+        try:
+            with open('/bootflash/temp.json', 'w') as outfile:
+                json.dump(ztp, outfile)
+        except (IOError, ValueError) as e:
+            log(3, e)
+
+        result = cli.execute('copy temp.json %s' % LOGAPI)
+        # log error message in case of failure
+        match = re.match('^(%Error .*)', result)
+        if match:
+            log(3, match.group(1))
+
+        try:
+            os.remove('/bootflash/temp.json')
+        except OSError as e:
+            log(3, e)
+
 def shutdown(save=False, abnormal=False):
     """ Cleansup and saves config if needed and terminates script """
     if save:
         log(6, 'Saving configuration upon script termination')
+
+    upload(status='Failed' if abnormal else 'Finished')
 
     if SYSLOG:
         cli.configure('''no logging host %s
@@ -171,14 +216,14 @@ def renumber_stack(stack, serials):
 
     return renumber
 
-def install(version, required, base_url, install_url, is_chassis):
+def install(target, is_chassis):
     """ Returns True if install script is configured or False otherwise """
     # remove leading zeros from required version numbers and compare
-    if (required is None or install_url is None
-        or version == re.sub(r'\b0+(\d)', r'\1', required.strip())):
+    if (target.version is None or target.install is None
+        or ztp['version'] == re.sub(r'\b0+(\d)', r'\1', target.version.strip())):
             return False
 
-    install_url = urljoin(base_url, install_url)
+    install_url = urljoin(target.base_url, target.install)
     # terminate script in case of invalid file
     log(6, 'Checking %s' % install_url)
     if not is_iosxe_package(install_url):
@@ -186,7 +231,7 @@ def install(version, required, base_url, install_url, is_chassis):
         shutdown(save=False, abnormal=True)
 
     # change boot mode if device is in bundle mode
-    if 'bundle' in version:
+    if 'bundle' in ztp['version']:
         fs = 'bootflash:' if is_chassis else 'flash:'
         log(6, 'Changing the Boot Mode')
         cli.configure('''no boot system
@@ -252,22 +297,21 @@ def download(file_url):
     else:
         return ''
 
-def apply_config(variables, base_url, config_url, template):
+def apply_config(target):
     """ Returns True if configuration template is applied successfully """
-    if config_url:
-        config_url = urljoin(base_url, config_url)
+    cfg_url = urljoin(target.base_url, target.config) if target.config else None
 
     # remove keyword 'end' from downloaded configuration
-    conf = re.sub('^\s*end\s*$', '', download(config_url), flags=re.MULTILINE)
-    if template:
-        conf += '\n' + template if len(conf) else template
+    conf = re.sub('^\s*end\s*$', '', download(cfg_url), flags=re.MULTILINE)
+    if target.template:
+        conf += '\n' + target.template if len(conf) else target.template
 
     if len(conf) == 0:
         return False
 
     # build configuration from template by $-based substitutions
-    if variables:
-        conf = Template(conf).safe_substitute(variables)
+    if target.subst:
+        conf = Template(conf).safe_substitute(target.subst)
 
     # apply configuration and log error message in case of failure
     try:
@@ -294,40 +338,18 @@ def blue_beacon(sw_nums):
 
 def final_cli(command):
     """ Returns True if given command string is executed succesfully """
+    success = False
     if command is not None:
-        try:
-            cli.cli(command)
-        except (cli.errors.cli_syntax_error, cli.errors.cli_exec_error) as e:
-            log(3, e)
-        else:
-            return True
-    else:
-        return False
+        success = True
+        for cmd in command.split(';'):
+            try:
+                ztp['cli'] = ztp.get('cli', '') + '{:-^60}'.format(cmd)
+                ztp['cli'] += cli.execute(cmd)
+            except cli.CLISyntaxError as e:
+                log(3, e)
+                success = False
 
-class Stack():
-    """ Object with matching device data. Provides attribute-like access """
-    def __init__(self, data, serials):
-        """ Initializes object with data and serials """
-        # absence of stack key indicates defaults dict
-        self.defaults = next((dct for dct in data if not 'stack' in dct), {})
-        # find dict with at least one common serial number in stack dict
-        self.stack_dict = next((dct for dct in data if 'stack' in dct
-                                and len(set(dct['stack'].values())
-                                        & set(serials.values()))), {})
-
-    def __getattr__(self, name):
-        """ x.__getattr__(y) <==> x.y """
-        return self.stack_dict.get(name, self.defaults.get(name, None))
-
-def status(**kwargs):
-    """ Encodes given named arguments and sends them to the log API """
-    if LOGAPI:
-        msg = quote_plus(json.dumps(kwargs))
-        result = cli.execute('show file information %s?msg=%s' % (LOGAPI, msg))
-        # log error message in case of failure
-        match = re.match('^(%Error .*)', result)
-        if match:
-            log(3, match.group(1))
+    return success
 
 def main():
     # setup IOS syslog for our own messages if server IP is specified
@@ -341,8 +363,8 @@ def main():
     # get platform serial numers and software version
     serials = get_serials()
     log(6, 'Platform serial number(s): %s' % ', '.join(serials.values()))
-    version = get_version()
-    log(6, 'Platform software version: %s' % version)
+    ztp['version'] = get_version()
+    log(6, 'Platform software version: %s' % ztp['version'])
     # load JSON formatted data if URL is specified and concatenate it to DATA
     json_str = download(JSON)
     try:
@@ -352,56 +374,56 @@ def main():
         shutdown(save=False, abnormal=True)  # malformed data; terminate script
 
     # lookup stack in dataset, if not found turn on beacon
-    my = Stack(data, serials)
-    if my.stack is None:
+    target = Stack(data, serials)
+    if target.stack is None:
         log(4, '% Stack not found in dataset')
         blue_beacon(serials.keys())
+        ztp['serial'] = next(iter(serials.values()))
     else:
+        ztp['serial'] = next(iter(target.stack.values()))
         # check if all specified switches are found, turn on beacon if not
-        missing = set(my.stack.values()) - set(serials.values())
+        missing = set(target.stack.values()) - set(serials.values())
         if len(missing):
             log(4, 'Missing switch(es): %s' % ', '.join(missing))
             blue_beacon(serials.keys())
 
         # check if all found switches are specified, turn on beacon if not
-        extra = set(serials.values()) - set(my.stack.values())
+        extra = set(serials.values()) - set(target.stack.values())
         if len(extra):
             log(4, 'Extra switch(es): %s' % ', '.join(extra))
             blue_beacon(serials.keys())
 
     is_chassis = 0 in serials
-    first_serial = next(iter(my.stack.values()))
     # first, check version and install software if needed
-    if install(version, my.version, my.base_url, my.install, is_chassis):
+    if install(target, is_chassis):
         log(6, 'Software upgrade starting asynchronously...')
-        status(serial=first_serial, version=version, status='Upgrading')
+        upload(status='Upgrading')
         cli.execute('event manager run upgrade')
     else:
         # second, check v-mismatch and perform autoupgrade if needed
         if not is_chassis and autoupgrade():
             log(6, 'V-Mismatch detected, upgrade starting asynchronously...')
-            status(serial=first_serial, version=version, status='Upgrading')
+            upload(status='Upgrading')
             cli.execute('event manager run upgrade')
         else:
             log(6, 'No software upgrade required')
             # third, check switch numbering and renumber stack if needed
-            if not is_chassis and renumber_stack(my.stack, serials):
+            if not is_chassis and renumber_stack(target.stack, serials):
                 log(6, 'Stack renumbered, reloading stack...')
-                status(serial=first_serial, version=version, status='Renumbered')
+                upload(status='Renumbered')
                 cli.execute('reload')
             else:
                 log(6, 'No need to renumber stack')
                 # fourth, apply configuration template if specified
-                if apply_config(my.subst, my.base_url, my.config, my.template):
+                if apply_config(target):
                     log(6, 'Configuration template applied successfully')
                 # fifth, execute final cli if specified
-                if final_cli(my.cli):
+                if final_cli(target.cli):
                     log(6, 'Final command(s) executed successfully')
 
                 # cleanup after step 4 or 5 and save config if specified
                 log(6, 'End of workflow reached')
-                status(serial=first_serial, version=version, status='Finished')
-                shutdown(save=my.save, abnormal=False)
+                shutdown(save=target.save, abnormal=False)
 
 if __name__ == "__main__":
     main()

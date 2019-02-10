@@ -226,25 +226,33 @@ def log_get():
     bottle.response.set_header('Pragma', 'no-cache')
     bottle.response.set_header('Cache-Control',
                                'no-cache, no-store, must-revalidate')
-    # Update log buffer from URL parameter or send log buffer if no parameter 
-    if 'msg' in bottle.request.query:
-        try:
-            msg = json.loads(bottle.request.query.msg)
-            if not isinstance(msg, dict):
-                error('Expected JSON object')
+    # Send log buffer
+    return json.dumps(logbuf)
 
-            msg['ip'] = bottle.request.remote_addr
-            msg['time'] = time.strftime('%x %X')
-            logbuf.append(msg)
-            # Write log buffer to file
-            with open('status.json', 'w') as outfile:
-                json.dump(logbuf, outfile, indent=4)
-        except (ValueError, IOError) as e:
-            error(e)
+@bottle.put('/log')
+def log_put():
+    log(bottle.request)
+    logbuf = []
+    try:
+        if os.path.exists('status.json'):
+            with open('status.json') as infile:
+                logbuf = json.load(infile)
+    except (ValueError, IOError) as e:
+        error(e)
 
-        return '\n'
-    else:
-        return json.dumps(logbuf)
+    try:
+        msg = json.loads(bottle.request.body.getvalue())
+        if not isinstance(msg, dict):
+            error('Expected JSON object')
+
+        msg['ip'] = bottle.request.remote_addr
+        msg['time'] = time.strftime('%x %X')
+        logbuf.append(msg)
+        # Write log buffer to file
+        with open('status.json', 'w') as outfile:
+            json.dump(logbuf, outfile, indent=4)
+    except (ValueError, IOError) as e:
+        error(e)
 
 @bottle.delete('/log')
 def log_delete():

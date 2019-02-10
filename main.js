@@ -1,7 +1,7 @@
 /**
  * ZTP GUI Web App
  * Author: Tim Dorssers
- * Version: 1.0
+ * Version: 1.1
  */
 
 function createDropdown(value, id, callback) {
@@ -36,7 +36,7 @@ function addOptionsFromTable(select) {
     for (var row = 1; row < table.rows.length; row++) {
         var ele = document.createElement('OPTION');
         // Value of element in first cell of each table row will be the option text
-        ele.text = table.rows.item(row).cells[0].childNodes[0].value;
+        ele.text = table.rows.item(row).cells[0].childNodes[0].data;
         select.appendChild(ele);
     }
 }
@@ -73,7 +73,7 @@ function createTableRow(table, object, key) {
             if (object[key]) ele.innerHTML = object[key];
             break;
         case 'install':
-            var ele = createDropdown(object[key], id, function () {
+            var ele = createDropdown(object[key], id, function() {
                 // Auto fill version input if version can be extracted from file name
                 var version = document.getElementById(table.id + '_version');
                 var match = /\.(\d+.\d+.\d+\w?)\./g.exec(document.getElementById(id).value);
@@ -103,18 +103,17 @@ function createCellWithButton(row, name, callback, id) {
     cell.appendChild(ele);
 }
 
-function createCellWithText(row, value, readOnly) {
+function createCellWithText(row, value) {
     var ele = document.createElement('INPUT');
     ele.type = 'text';
     ele.value = value;
-    ele.readOnly = readOnly;
     row.insertCell(-1).appendChild(ele);
 }
 
 function createNestedTableRow(table, index, object, key) {
     var row = table.insertRow(index);
-    createCellWithText(row, key, false);
-    createCellWithText(row, object[key], false);
+    createCellWithText(row, key);
+    createCellWithText(row, object[key]);
     createCellWithButton(row, 'Insert Below', function() {addRow(this)}, null);
     createCellWithButton(row, 'Remove', function() {removeRow(this)}, null);
 }
@@ -154,7 +153,7 @@ function createNestedTable(table, object, key) {
 
 function createContent(data) {
     if (typeof createContent.lastIndex === 'undefined') createContent.lastIndex = 0;
-    for (var index in data) {
+    for (var index = 0; index < data.length; index++) {
         var table = document.createElement('TABLE');
         // Table ID is used later to recontruct the array of objects
         table.id = 'table_' + createContent.lastIndex;
@@ -282,7 +281,7 @@ function loadData() {
                 var data = JSON.parse(this.responseText);
                 // Look for a defaults object
                 var gotDefaults = false;
-                for (var index in data) {
+                for (var index = 0; index < data.length; index++) {
                     if (!('stack' in data[index])) gotDefaults = true;
                 }
                 // Put an empty defaults object at head of the array
@@ -299,12 +298,16 @@ function loadData() {
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send();
     loadList();
+    loadLog();
 }
 
-function openFile(url) {
-    return function() {
-        window.open(url, '_blank');
-    }
+function createLink(txt, url, callback) {
+    var a = document.createElement('A');
+    a.href = url ? url : '#';
+    if (callback === null) a.target = '_blank';
+    a.addEventListener('click', callback, false);
+    a.innerHTML = txt;
+    return a;
 }
 
 function loadList() {
@@ -313,21 +316,24 @@ function loadList() {
         if (this.readyState == 4 && this.status == 200) {
             // Parse retrieved JSON data
             var files = JSON.parse(this.responseText);
+            if (files.length == 0) return;
             // Create table with file list
             var table = document.createElement('TABLE');
             table.id = 'table_file';
-            if (files.length) {
+            var row = table.insertRow(-1);
+            ['path', 'size', 'action'].forEach(function(key) {
+                var cell = document.createElement('TH');
+                cell.innerHTML = key;
+                row.appendChild(cell);
+            });
+            for (var index = 0; index < files.length; index++) {
                 var row = table.insertRow(-1);
-                row.className = 'center';
-                row.insertCell(-1).innerHTML = 'path';
-                row.insertCell(-1).innerHTML = 'size';
-            }
-            for (var index in files) {
-                var row = table.insertRow(-1);
-                createCellWithText(row, files[index].file, true);
-                createCellWithText(row, files[index].size, true);
-                createCellWithButton(row, 'Download', openFile('/file/' + files[index].file), null);
-                createCellWithButton(row, 'Remove', function() {deleteFile(this)}, null);
+                row.insertCell(-1).innerHTML = files[index].file;
+                row.insertCell(-1).innerHTML = files[index].size;
+                var cell = row.insertCell(-1);
+                cell.appendChild(createLink('Download', '/file/' + files[index].file, null));
+                cell.appendChild(document.createTextNode(' '));
+                cell.appendChild(createLink('Remove', null, function() {deleteFile(this)}));
             }
             document.getElementById('files').appendChild(table);
             updateOptionsFromTable();
@@ -339,6 +345,7 @@ function loadList() {
 }
 
 function deleteFile(button) {
+    event.preventDefault()
     var tr = button.parentNode.parentNode;
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -358,7 +365,7 @@ function deleteFile(button) {
         }
     };
     // First cell in row is the file name
-    xhttp.open("DELETE", "/file/" + tr.cells[0].childNodes[0].value, true);
+    xhttp.open("DELETE", "/file/" + tr.cells[0].childNodes[0].data, true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send();
 }
@@ -391,6 +398,10 @@ function upload() {
     }
 }
 
+function abortUpload(xhttp) {
+    return function() {xhttp.abort()};
+}
+
 function uploadFile(file, i) {
     var bar = document.getElementById('bar_' + i);
     var cancel = document.getElementById('cancel_' + i);
@@ -419,7 +430,7 @@ function uploadFile(file, i) {
     xhttp.open('POST', '/file');
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send(data);
-    cancel.addEventListener('click', function() {xhttp.abort()}, false);
+    cancel.addEventListener('click', abortUpload(xhttp), false);
 }
 
 function importCsv() {
@@ -439,41 +450,52 @@ function importCsv() {
 }
 
 function loadLog() {
-    // Remove log entry table
-    var table = document.getElementById('table_log');
-    if (table !== null) table.parentNode.removeChild(table);
-    // Display modal frame
-    var modal = document.getElementById('modal');
-    modal.style.display = 'block';
-    window.onclick = function(event) {
-        if (event.target == modal) modal.style.display = "none";
-    };
+    var log = document.getElementById('log');
+    // Remove all content
+    while (log.firstChild) {
+        log.removeChild(log.firstChild);
+    }
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
             if (this.status == 200) {
-                var log = document.getElementById('log');
                 // Parse retrieved JSON data
                 var entries = JSON.parse(this.responseText);
+                if (entries.length == 0) {
+                    var p = document.createElement('P');
+                    p.innerHTML = 'No data';
+                    log.appendChild(p);
+                    return;
+                }
                 // Create table with log entries
                 var table = document.createElement('TABLE');
                 table.id = 'table_log';
                 var row = table.insertRow(-1);
-                ['ip', 'time', 'serial', 'version', 'status'].forEach(function(key) {
+                ['ip', 'time', 'serial', 'version', 'status', 'view'].forEach(function(key) {
                     var cell = document.createElement('TH');
                     cell.innerHTML = key;
                     row.appendChild(cell);
                 });
-                for (var index in entries) {
+                for (var index = 0; index < entries.length; index++) {
                     var row = table.insertRow(-1);
                     row.insertCell(-1).innerHTML = entries[index]['ip'];
                     row.insertCell(-1).innerHTML = entries[index]['time'];
                     row.insertCell(-1).innerHTML = entries[index]['serial'];
                     row.insertCell(-1).innerHTML = entries[index]['version'];
                     row.insertCell(-1).innerHTML = entries[index]['status'];
+                    var cell = row.insertCell(-1);
+                    ['logbuf', 'cli'].forEach(function(key) {
+                        if (typeof entries[index][key] !== 'undefined') {
+                            cell.appendChild(createLink(key, null, openModal(entries[index][key])));
+                            cell.appendChild(document.createTextNode(' '));
+                        }
+                    });
                 }
                 log.appendChild(table);
             } else {
+                var p = document.createElement('P');
+                p.innerHTML = 'No data';
+                log.appendChild(p);
                 displayError(this);
             }
         }
@@ -494,4 +516,38 @@ function clearLog() {
     xhttp.open("DELETE", "/log", true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send();
+}
+
+function openPage(evt, name) {
+    var tabcontent = document.getElementsByClassName("tabcontent");
+    for (var i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+    var tablinks = document.getElementsByClassName("tablinks");
+    for (var i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+    document.getElementById(name).style.display = "block";
+    evt.currentTarget.className += " active";
+}
+
+function openModal(txt) {
+    return function() {
+        event.preventDefault()
+        var modalcontent = document.getElementById('modalcontent');
+        // Remove all content
+        while (modalcontent.firstChild) {
+            modalcontent.removeChild(modalcontent.firstChild);
+        }
+        // Add content
+        var pre = document.createElement('PRE');
+        pre.innerHTML = txt;
+        modalcontent.appendChild(pre);
+        // Display modal frame
+        var modal = document.getElementById('modal');
+        modal.style.display = 'block';
+        window.onclick = function(event) {
+            if (event.target == modal) modal.style.display = "none";
+        };
+    }
 }

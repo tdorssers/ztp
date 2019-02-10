@@ -1,6 +1,6 @@
 /* ZTP GUI Web App
 Author: Tim Dorssers
-Version: 1.0 */
+Version: 1.1 */
 html {
     background-color: #eee;
     font-family: arial, sans-serif;
@@ -8,7 +8,7 @@ html {
 body {
     background-color: #fff;
     border: 1px solid #ddd;
-    padding: 0px 15px 0px 15px;
+    padding: 0px 15px;
     margin: 15px;
 }
 .box {
@@ -20,7 +20,7 @@ table, input[type=text], input[type=file], textarea {
     width: 100%;
 }
 td {
-    padding: 1px 3px 1px 3px;
+    padding: 1px 3px;
 }
 td.min {
     width: 1%;
@@ -95,6 +95,38 @@ span {
     text-decoration: none;
     cursor: pointer;
 }
-#table_log tr:nth-child(even) {
+#log table, #files table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 1px solid #ddd;
+}
+#table_log tr:nth-child(even), #table_file tr:nth-child(even) {
     background-color: #eee;
+}
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #eee;
+}
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 5px 15px;
+    transition: 0.3s;
+    font-size: medium;
+}
+.tab button:hover {
+    background-color: #ddd;
+}
+.tab button.active {
+    background-color: skyblue;
+}
+.tabcontent {
+    display: none;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;
 }

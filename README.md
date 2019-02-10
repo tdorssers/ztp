@@ -22,6 +22,7 @@ The Python script has the following functionality built-in:
 - Executes commands upon script completion, such as for Smart Licensing registration
 - Can save the device configuration, if the workflow has completed successfully
 - Sends logging to a specified syslog server for script monitoring
+- Can also send script and command output as JSON text to a URL (refer to GUI App for details)
 
 ## Using
 
@@ -101,13 +102,15 @@ Call | Description
 *GET /csv* | upon receiving the request, the server flattens the dataset and exports it as a CSV file
 *POST /csv* | the client sends the CSV file with the flattened dataset to the server for importing
 *GET /log* | upon receiving the request, the server sends the log entries as JSON text to the client
-*GET /log?msg=<status>* | used by the switch to send ZTP workflow status as JSON text to the server
+*PUT /log* | used by *script.py* to send ZTP workflow output as JSON text to the server
 
 *app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
 
 *main.js* displays text boxes for every key value in the DATA list of dicts. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files.
 
 ![](media/gui.png)
+![](media/gui2.png)
+![](media/gui3.png)
 
 ## Installation
 
@@ -131,6 +134,8 @@ Put *app.py*, *index.html*, *main.js*, *style.css* and *script.py* in a director
 The app can be run on Windows as well. Python 2.7 and 3 are supported.
 
 ## Testing
+
+Only front-panel ports are supported.
 
 The script has been successfully tested on the following platforms running 16.6.x and higher software:
 - Cisco Catalyst 9300 Series Switches
