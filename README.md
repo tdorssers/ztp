@@ -6,23 +6,27 @@ Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/pro
 
 ![](media/ztp.png)
 
+First step is to check if whether there is a startup config present, if not, then the second step is to perform a DHCP request. The third step is to download the script specified in the DHCP reply. The forth and final step is to run the Python script in the Guest Shell environment. The Guest Shell remains enabled after the script has been executed.
+
 ## Overview
 
-The Python script has the following functionality built-in:
+By default, the Guest Shell has access to the network via the RP management port. When a device is connected to the network through the front-panel ports, the Guest Shell has no network connection. *script.py* uses CLI commands such as `copy` and `more` to access the network.
+
+*script.py* has the following functionality built-in:
 - Downloads and installs IOS XE software from a given URL, if needed
 - Changes Boot Mode to installed, if device is in bundled boot mode
 - Performs stack renumbering, based on a specified list of serial numbers and switch numbers
 - Sets switch priorities, highest priority on the top switch
 - Handles stack version mismatches using *auto upgrade*
-- Turns on the blue beacons of a switch stack in case serial numbers are missing or are extra
-- Uses an external dictionary by downloading a specified JSON text file (refer to GUI App for details)
-- Can also use an internal dictionary for data storage, such as serial numbers and configuration templates
-- Applies a configuration template, using $-based placeholders for variable substitutions
+- Turns on the blue beacons of a switch in case serial numbers are missing or are extra
+- Downloads instruction data (such as serial numbers and configuration templates) in JSON formatted text
+- Can also use instruction data embedded in the script
+- Applies a configuration template, optionally using $-based placeholders for variable substitution
 - Can also download an external template file from a given URL
 - Executes commands upon script completion, such as for Smart Licensing registration
+- Sends script and command output as JSON text to a URL (refer to GUI App for details)
 - Can save the device configuration, if the workflow has completed successfully
 - Sends logging to a specified syslog server for script monitoring
-- Can also send script and command output as JSON text to a URL (refer to GUI App for details)
 
 ## Using
 
@@ -60,10 +64,10 @@ DATA = [{
             interface range $uplink1 , $uplink2
              description uplink'''
     }, {
-        'stack': {1: 'FCW3498U0EL', 2: 'FCW348U9FUI', 3: 'FOC3490ERIJ'},
+        'stack': {1: 'FCW0000D0LR', 2: 'FCW0000G0L7', 3: 'FOC0000X0DW'},
         'subst': {'name': 'switch1', 'uplink1': 'Gi1/0/1', 'uplink2': 'Gi2/0/1'}
     }, {
-        'stack': {1: 'FCW34897QWE'},
+        'stack': {1: 'FCW0000D0LT'},
         'subst': {'name': 'switch2', 'uplink1': 'Gi1/0/1', 'uplink2': 'Gi1/0/2'},
         'version': '16.9.2',
         'install': 'http://10.0.0.1/cat9k_iosxe.16.09.02.SPA.bin',
@@ -84,12 +88,14 @@ DATA = []
 ## GUI App
 
 The GUI App consists of two components:
-- An API server backend *app.py* based on [Bottle](http://bottlepy.org/) (a micro web framework for Python) and [Waitress](http://waitress.readthedocs.io/) a production-quality pure-Python WSGI server
-- An AJAX web frontend written in pure JavaScript (*index.html*, *main.js* and *style.css*)
+- A RESTful web server backend *app.py* based on [Bottle](http://bottlepy.org/) (a micro web framework for Python) and [Waitress](http://waitress.readthedocs.io/) a production-quality pure-Python WSGI server
+- An AJAX web client written in pure JavaScript (*index.html*, *main.js* and *style.css*)
+
+Simply put, the client retrieves instruction data from the server and stores new instruction data on the server entered by the user. Then *script.py* retrieves that instruction data, executes it and stores the output on the server:
 
 ![](media/api.png)
 
-The API calls or routes provided by *app.py* are:
+The REST APIs provided by *app.py* are:
 
 Call | Description
 --- | ---
@@ -106,7 +112,7 @@ Call | Description
 
 *app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
 
-*main.js* displays text boxes for every key value in the DATA list of dicts. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files.
+On the Home tab, the GUI lists all logged runs of *script.py*. The GUI displays text boxes for every key value in the DATA list of dicts on the Settings tab. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files on the Files tab:
 
 ![](media/gui.png)
 ![](media/gui2.png)
@@ -134,8 +140,6 @@ Put *app.py*, *index.html*, *main.js*, *style.css* and *script.py* in a director
 The app can be run on Windows as well. Python 2.7 and 3 are supported.
 
 ## Testing
-
-Only front-panel ports are supported.
 
 The script has been successfully tested on the following platforms running 16.6.x and higher software:
 - Cisco Catalyst 9300 Series Switches
