@@ -67,10 +67,22 @@ function createTableRow(table, object, key) {
             ele.type = 'checkbox';
             if (object[key]) ele.checked = true;
             break;
+        case 'cli':
         case 'template':
             var ele = document.createElement('TEXTAREA');
-            ele.rows = 5;
-            if (object[key]) ele.innerHTML = object[key];
+            ele.addEventListener('input', function() {
+                // Auto resize text area
+				var breaks = this.value.match(/\n/g);
+                var lines = breaks ? breaks.length + 2 : 2;
+                this.rows = (lines < 10) ? lines : 10;
+            }, false);
+            if (object[key]) {
+                ele.innerHTML = object[key];
+                // Set initial text area height
+				var breaks = object[key].match(/\n/g);
+                var lines = breaks ? breaks.length + 2 : 2;
+                ele.rows = (lines < 10) ? lines : 10;
+            }
             break;
         case 'install':
             var ele = createDropdown(object[key], id, function() {
@@ -486,7 +498,7 @@ function loadLog() {
                     var cell = row.insertCell(-1);
                     ['logbuf', 'cli'].forEach(function(key) {
                         if (typeof entries[index][key] !== 'undefined') {
-                            cell.appendChild(createLink(key, null, openModal(entries[index][key])));
+                            cell.appendChild(createLink(key, null, openModal(key, entries[index][key])));
                             cell.appendChild(document.createTextNode(' '));
                         }
                     });
@@ -531,9 +543,10 @@ function openPage(evt, name) {
     evt.currentTarget.className += " active";
 }
 
-function openModal(txt) {
+function openModal(head, txt) {
     return function() {
         event.preventDefault()
+		document.getElementById('modalhead').innerHTML = head;
         var modalcontent = document.getElementById('modalcontent');
         // Remove all content
         while (modalcontent.firstChild) {

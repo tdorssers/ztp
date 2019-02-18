@@ -44,7 +44,7 @@ By default, the Guest Shell has access to the network via the RP management port
   *install* | string with URL of target IOS to download
   *config* | string with URL of configuration template to download
   *subst* | dict with keys that match the placeholders in the template
-  *cli* | string of finishing commands separated by space and semicolon
+  *cli* | string of final IOS commands, or Python if line starts with %
   *save* | boolean to indicate to save configuration at script completion
   *template* | string holding configuration template with $-based placeholders
 
@@ -129,7 +129,11 @@ ip dhcp pool ztp_pool
  option 67 ascii http://10.0.0.1:8080/file/script.py
 ```
 
-Install [Bottle](https://pypi.org/project/bottle/) and [Waitress](https://pypi.org/project/waitress/) using [PIP](https://pypi.org/project/pip/) or on Ubuntu as follows:
+Install [Bottle](https://pypi.org/project/bottle/) and [Waitress](https://pypi.org/project/waitress/) using [PIP](https://pypi.org/project/pip/):
+
+`pip install bottle waitress`
+
+or on Ubuntu as follows:
 
 `sudo apt-get install python-bottle python-waitress`
 
@@ -137,7 +141,7 @@ Put *app.py*, *index.html*, *main.js*, *style.css* and *script.py* in a director
 
 `nohup python app.py &`
 
-The app can be run on Windows as well. Python 2.7 and 3 are supported.
+The app can be run on Windows as well. Python 2.7+ and 3.4+ are supported.
 
 ## Testing
 

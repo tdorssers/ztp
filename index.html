@@ -17,15 +17,17 @@
             <button class="tablinks" onclick="openPage(event, 'filestab')">Files</button>
         </div>
         <div id="hometab" class="tabcontent">
-            <p id="log"></p>
+            <p id="log" style="max-height: calc(100vh - 225px); overflow-y: auto; margin-bottom: 15px;"></p>
             <input type="button" value="Refresh" onclick="loadLog()"/>
             <input type="button" value="Clear" onclick="clearLog()"/>
         </div>
         <div id="settingstab" class="tabcontent">
-            <p>Defaults</p>
-            <div id="defaults" class="box"></div>
-            <p>Stacks</p>
-            <div id="stacks"></div>
+            <div style="max-height: calc(100vh - 215px); overflow-y: auto; margin-bottom: 15px;">
+                <p>Defaults</p>
+                <div id="defaults" class="box"></div>
+                <p>Stacks</p>
+                <div id="stacks"></div>
+            </div>
             <form id="form_import">
                 <table>
                     <tr>
@@ -43,7 +45,7 @@
             </form>
         </div>
         <div id="filestab" class="tabcontent">
-            <p id="files"></p>
+            <p id="files" style="max-height: calc(100vh - 265px); overflow-y: auto; margin-bottom: 15px;"></p>
             <form id="form_upload" class="box">
                 <table>
                     <tr class="center">
@@ -68,6 +70,7 @@
         <div id="modal">
             <div class="content">
                 <span class="close" onclick="document.getElementById('modal').style.display = 'none'">&times;</span>
+                <p id="modalhead"></p>
                 <div id="modalcontent" class="scrollable"></div>
             </div>
         </div>

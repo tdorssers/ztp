@@ -19,6 +19,10 @@ body {
 table, input[type=text], input[type=file], textarea {
     width: 100%;
 }
+textarea {
+    white-space: nowrap;
+    resize: vertical;
+}
 td {
     padding: 1px 3px;
 }
@@ -81,7 +85,7 @@ span {
     border: 1px solid #777;
 }
 #modal .scrollable {
-    max-height: calc(100% - 100px);
+    max-height: calc(100% - 46px);
     overflow-y: auto;
 }
 #modal .close {
@@ -94,6 +98,10 @@ span {
     color: #000;
     text-decoration: none;
     cursor: pointer;
+}
+pre {
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 #log table, #files table {
     border-collapse: collapse;

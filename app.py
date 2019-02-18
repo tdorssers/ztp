@@ -7,7 +7,7 @@ script validates the format of the data for every API call. Error messages of
 failed API calls are presented in the GUI.
 
 Author:  Tim Dorssers
-Version: 1.0
+Version: 1.1
 """
 
 import io

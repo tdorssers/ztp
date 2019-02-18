@@ -47,7 +47,7 @@ JSON = 'http://10.0.0.1:8080/data'
 # 'install' : string with URL of target IOS to download
 # 'config'  : string with URL of configuration template to download
 # 'subst'   : dict with keys that match the placeholders in the template
-# 'cli'     : string of finishing commands separated by space and semicolon
+# 'cli'     : string of final IOS commands, or Python if the line starts with %
 # 'save'    : boolean to indicate to save configuration at script completion
 # 'template': string holding configuration template with $-based placeholders
 DATA = []
@@ -192,7 +192,7 @@ def renumber_stack(stack, serials):
             # calculate new switch priority
             new_prio = 16 - int(new_num)
             # lookup current switch priority
-            old_prio = next((p for n, p in match if int(n) == old_num), None)
+            old_prio = next((p for n, p in match if int(n) == old_num), 1)
             if int(old_prio) != new_prio:
                 # check if top switch is not active
                 if switch.find('*{}'.format(sorted(serials.keys())[0])) == -1:
@@ -336,18 +336,31 @@ def blue_beacon(sw_nums):
         except cli.CLISyntaxError:
             pass
 
+        log(6, 'Switch %d beacon LED turned on' % num)
+
 def final_cli(command):
     """ Returns True if given command string is executed succesfully """
     success = False
     if command is not None:
         success = True
-        for cmd in command.split(';'):
-            try:
-                ztp['cli'] = ztp.get('cli', '') + '{:-^60}'.format(cmd)
-                ztp['cli'] += cli.execute(cmd)
-            except cli.CLISyntaxError as e:
-                log(3, e)
-                success = False
+        for cmd in command.splitlines():
+            # check if command line starts with %
+            match = re.match('\s*%\s*(.*)', cmd)
+            if match:
+                try:
+                    exec(match.group(1))
+                except Exception as e:
+                    log(3, 'Final command failure: %s' % e)
+                    success = False
+            else:
+                try:
+                    output = cli.execute(cmd)
+                except cli.CLISyntaxError as e:
+                    log(3, 'Final command failure: %s' % e)
+                    success = False
+                else:
+                    fmt = '{}{:-^60.54}\n\n{}\n\n'
+                    ztp['cli'] = fmt.format(ztp.get('cli', ''), cmd, output)
 
     return success
 
@@ -378,9 +391,9 @@ def main():
     if target.stack is None:
         log(4, '% Stack not found in dataset')
         blue_beacon(serials.keys())
-        ztp['serial'] = next(iter(serials.values()))
+        ztp['serial'] = serials[sorted(serials.keys())[0]]
     else:
-        ztp['serial'] = next(iter(target.stack.values()))
+        ztp['serial'] = target.stack[sorted(target.stack.keys())[0]]
         # check if all specified switches are found, turn on beacon if not
         missing = set(target.stack.values()) - set(serials.values())
         if len(missing):
@@ -393,7 +406,7 @@ def main():
             log(4, 'Extra switch(es): %s' % ', '.join(extra))
             blue_beacon(serials.keys())
 
-    is_chassis = 0 in serials
+    is_chassis = bool(0 in serials)
     # first, check version and install software if needed
     if install(target, is_chassis):
         log(6, 'Software upgrade starting asynchronously...')
