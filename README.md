@@ -44,7 +44,7 @@ By default, the Guest Shell has access to the network via the RP management port
   *install* | string with URL of target IOS to download
   *config* | string with URL of configuration template to download
   *subst* | dict with keys that match the placeholders in the template
-  *cli* | string of final IOS commands, or Python if line starts with %
+  *cli* | string of final IOS commands, or Python if within {{...}}
   *save* | boolean to indicate to save configuration at script completion
   *template* | string holding configuration template with $-based placeholders
 
@@ -85,6 +85,14 @@ JSON = 'http://10.0.0.1:8080/data'
 DATA = []
 ```
 
+Python expressions can be used in the final *cli* command string. For example to use the serial number in a file name:
+
+`copy run http://10.0.0.1:8080/file/{{ztp['serial']}}.conf`
+
+Or to pause the command execution for a moment:
+
+`{{time.sleep(10)}}`
+
 ## GUI App
 
 The GUI App consists of two components:
@@ -101,7 +109,8 @@ Call | Description
 --- | ---
 *GET /file/<name>* | used to serve files and subdirectories, such as IOS XE images or configurations
 *DELETE /file/<name>* | the request removes the specified file from disk
-*POST /file* | used by the AJAX client form to upload a file to the server 
+*PUT /file/<name>* | can be used to upload files from IOS to the server
+*POST /file* | used by the AJAX client form to upload a file to the server
 *GET /list* | the server sends a JSON text list of all files in the script directory and subdirectories 
 *GET /data* | upon receiving the request, the server sends the dataset as JSON text to the client/switch
 *POST /data* | the client sends the dataset as JSON text to the server using the HTML POST method

@@ -47,7 +47,7 @@ JSON = 'http://10.0.0.1:8080/data'
 # 'install' : string with URL of target IOS to download
 # 'config'  : string with URL of configuration template to download
 # 'subst'   : dict with keys that match the placeholders in the template
-# 'cli'     : string of final IOS commands, or Python if the line starts with %
+# 'cli'     : string of final IOS commands, or Python if within {{...}}
 # 'save'    : boolean to indicate to save configuration at script completion
 # 'template': string holding configuration template with $-based placeholders
 DATA = []
@@ -131,18 +131,22 @@ def upload(**kwargs):
     """ Adds given named arguments to dict and sends data to log API """
     ztp.update(kwargs)
     if LOGAPI:
-        log(6, 'Storing %s...' % LOGAPI)
         try:
             with open('/bootflash/temp.json', 'w') as outfile:
                 json.dump(ztp, outfile)
         except (IOError, ValueError) as e:
             log(3, e)
+            return
 
-        result = cli.execute('copy temp.json %s' % LOGAPI)
-        # log error message in case of failure
-        match = re.match('^(%Error .*)', result)
-        if match:
-            log(3, match.group(1))
+        for retry in range(3):
+            log(6, 'Storing %s...' % LOGAPI)
+            result = cli.execute('copy temp.json %s' % LOGAPI)
+            # log error message in case of failure
+            match = re.search('^(%Error .*)', result, re.MULTILINE)
+            if match:
+                log(3, match.group(1))
+            else:
+                break
 
         try:
             os.remove('/bootflash/temp.json')
@@ -154,6 +158,7 @@ def shutdown(save=False, abnormal=False):
     if save:
         log(6, 'Saving configuration upon script termination')
 
+    # store script state to LOGAPI if specified
     upload(status='Failed' if abnormal else 'Finished')
 
     if SYSLOG:
@@ -163,6 +168,7 @@ def shutdown(save=False, abnormal=False):
     if save:
         cli.execute('copy running-config startup-config')
 
+    # terminate script with exit status
     sys.exit(int(abnormal))
 
 def renumber_stack(stack, serials):
@@ -284,12 +290,15 @@ def parse_hex(fmt):
 def download(file_url):
     """ Returns file contents or empty string in case of failure """
     if file_url:
-        log(6, 'Downloading %s...' % file_url)
-        result = cli.execute('more %s' % file_url)
-        # log error message in case of failure
-        match = re.match('^(%Error .*)', result)
-        if match:
-            log(3, match.group(1))
+        for retry in range(3):
+            log(6, 'Downloading %s...' % file_url)
+            result = cli.execute('more %s' % file_url)
+            # log error message in case of failure
+            match = re.match('^(%Error .*)', result)
+            if match:
+                log(3, match.group(1))
+            else:
+                break
 
         # extract file contents from output
         match = re.search('^Loading %s (.*)' % file_url, result, re.DOTALL)
@@ -344,23 +353,31 @@ def final_cli(command):
     if command is not None:
         success = True
         for cmd in command.splitlines():
-            # check if command line starts with %
-            match = re.match('\s*%\s*(.*)', cmd)
+            # look for python expressions within {{...}}
+            match = re.search('{{(.*?)}}', cmd)
             if match:
                 try:
-                    exec(match.group(1))
+                    result = eval(match.group(1))  # evaluate expression
                 except Exception as e:
                     log(3, 'Final command failure: %s' % e)
                     success = False
-            else:
-                try:
-                    output = cli.execute(cmd)
-                except cli.CLISyntaxError as e:
-                    log(3, 'Final command failure: %s' % e)
-                    success = False
+                    continue
                 else:
-                    fmt = '{}{:-^60.54}\n\n{}\n\n'
-                    ztp['cli'] = fmt.format(ztp.get('cli', ''), cmd, output)
+                    if result is None:
+                        continue
+
+                # replace expression with result
+                cmd = cmd.replace(match.group(0), str(result))
+
+            try:
+                output = cli.execute(cmd)  # execute command
+            except cli.CLISyntaxError as e:
+                log(3, 'Final command failure: %s' % e)
+                success = False
+            else:
+                # append command output to cli item of global dict ztp
+                fmt = '{}{:-^60.54}\n\n{}\n\n'
+                ztp['cli'] = fmt.format(ztp.get('cli', ''), cmd, output)
 
     return success
 

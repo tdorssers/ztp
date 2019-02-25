@@ -21,8 +21,8 @@ import codecs
 import logging
 from collections import OrderedDict
 
-HIDE = ['app.py', 'data.json', 'index.html', 'main.js', 'status.json',
-        'style.css', 'script.py']
+HIDE = ['app.py', 'data.json', 'index.html', 'main.js',
+        'log.json', 'style.css', 'script.py']
 
 def log(req):
     """ Logs request from client to stderr """
@@ -58,6 +58,20 @@ def delete_file(filepath):
             os.remove(filepath)
         except OSError as e:
             error(e)
+
+@bottle.put('/file/<filepath:path>')
+def put_file(filepath):
+    """ Handles file upload """
+    log(bottle.request)
+    folder, fname = os.path.split(filepath)
+    upload = bottle.FileUpload(bottle.request.body, None, filename=fname)
+    try:
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
+
+        upload.save(os.path.join(folder, upload.filename), overwrite=True)
+    except (OSError, IOError) as e:
+        error(e)
 
 @bottle.post('/file')
 def post_file():
@@ -211,11 +225,12 @@ def post_data():
 
 @bottle.get('/log')
 def log_get():
+    """ Parses JSON log file and sends it to the web server """
     log(bottle.request)
     logbuf = []
     try:
-        if os.path.exists('status.json'):
-            with open('status.json') as infile:
+        if os.path.exists('log.json'):
+            with open('log.json') as infile:
                 logbuf = json.load(infile)
     except (ValueError, IOError) as e:
         error(e)
@@ -231,11 +246,12 @@ def log_get():
 
 @bottle.put('/log')
 def log_put():
+    """ Appends JSON log entries to file """
     log(bottle.request)
     logbuf = []
     try:
-        if os.path.exists('status.json'):
-            with open('status.json') as infile:
+        if os.path.exists('log.json'):
+            with open('log.json') as infile:
                 logbuf = json.load(infile)
     except (ValueError, IOError) as e:
         error(e)
@@ -249,17 +265,18 @@ def log_put():
         msg['time'] = time.strftime('%x %X')
         logbuf.append(msg)
         # Write log buffer to file
-        with open('status.json', 'w') as outfile:
+        with open('log.json', 'w') as outfile:
             json.dump(logbuf, outfile, indent=4)
     except (ValueError, IOError) as e:
         error(e)
 
 @bottle.delete('/log')
 def log_delete():
+    """ Empties JSON log file """
     log(bottle.request)
     # Just write empty list to file
     try:
-        with open('status.json', 'w') as outfile:
+        with open('log.json', 'w') as outfile:
             json.dump([], outfile)
     except (ValueError, IOError) as e:
         error(e)
