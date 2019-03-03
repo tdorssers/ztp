@@ -72,14 +72,14 @@ function createTableRow(table, object, key) {
             var ele = document.createElement('TEXTAREA');
             ele.addEventListener('input', function() {
                 // Auto resize text area
-				var breaks = this.value.match(/\n/g);
+                var breaks = this.value.match(/\n/g);
                 var lines = breaks ? breaks.length + 2 : 2;
                 this.rows = (lines < 10) ? lines : 10;
             }, false);
             if (object[key]) {
                 ele.innerHTML = object[key];
                 // Set initial text area height
-				var breaks = object[key].match(/\n/g);
+                var breaks = object[key].match(/\n/g);
                 var lines = breaks ? breaks.length + 2 : 2;
                 ele.rows = (lines < 10) ? lines : 10;
             }
@@ -163,8 +163,14 @@ function createNestedTable(table, object, key) {
     row.insertCell(-1).appendChild(ele);
 }
 
+function removeContent(ele) {
+    // Remove all children from DOM element
+    while (ele.firstChild) {
+        ele.removeChild(ele.firstChild);
+    }
+}
+
 function createContent(data) {
-    if (typeof createContent.lastIndex === 'undefined') createContent.lastIndex = 0;
     for (var index = 0; index < data.length; index++) {
         var table = document.createElement('TABLE');
         // Table ID is used later to recontruct the array of objects
@@ -226,8 +232,8 @@ function submitData(exportCsv) {
     var data = [];
     var tables = document.getElementsByTagName('TABLE');
     for (var i = 0; i < tables.length; i++) {
-        var tableId = tables[i].id;
-        if (tableId === null) continue;
+        //var tableId = tables[i].id;
+        //if (tableId === null) continue;
         // Split the table ID into array index and key name
         var refName = tables[i].id.split('_');
         if (isNaN(refName[1])) continue;
@@ -284,10 +290,12 @@ function submitData(exportCsv) {
 }
 
 function loadData() {
-    window.onbeforeunload = function() {return ""};
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
+			removeContent(document.getElementById('stacks'));
+			removeContent(document.getElementById('defaults'));
+            createContent.lastIndex = 0;
             if (this.status == 200) {
                 // Parse retrieved JSON data
                 var data = JSON.parse(this.responseText);
@@ -309,8 +317,6 @@ function loadData() {
     xhttp.open("GET", "/data", true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send();
-    loadList();
-    loadLog();
 }
 
 function createLink(txt, url, callback) {
@@ -323,6 +329,9 @@ function createLink(txt, url, callback) {
 }
 
 function loadList() {
+    var table = document.getElementById('table_file');
+    if (table !== null) table.parentNode.removeChild(table);
+    document.getElementById('form_upload').reset();
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4 && this.status == 200) {
@@ -357,7 +366,7 @@ function loadList() {
 }
 
 function deleteFile(button) {
-    event.preventDefault()
+    event.preventDefault()  // Prevent default action for anchor tag
     var tr = button.parentNode.parentNode;
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -405,7 +414,9 @@ function upload() {
         row.insertCell(-1).appendChild(progress);
         // Third cell is the cancel button
         createCellWithButton(row, 'Cancel', null, 'cancel_' + i);
-        window.scrollTo(0, document.body.scrollHeight);
+        // Resize file list
+        var height = 265 + table.scrollHeight;
+        document.getElementById('files').style.maxHeight = 'calc(100vh - ' + height + 'px)';
         uploadFile(browse.files[i], i);
     }
 }
@@ -416,8 +427,8 @@ function abortUpload(xhttp) {
 
 function uploadFile(file, i) {
     var bar = document.getElementById('bar_' + i);
-    var cancel = document.getElementById('cancel_' + i);
     var tr = bar.parentNode.parentNode.parentNode;
+    // Prepare form fields to be sent by xhttp
     var data = new FormData();
     data.append('folder', document.getElementById('folder').value);
     data.append('upload', file);
@@ -427,13 +438,12 @@ function uploadFile(file, i) {
             if (this.status != 200) displayError(this);
             // Remove progress bar
             tr.parentNode.removeChild(tr);
-            if (document.getElementById('table_progress').rows.length == 0) {
-                // No more progress bars so remove table and reload list
-                var table = document.getElementById('table_file');
-                if (table !== null) table.parentNode.removeChild(table);
-                document.getElementById('form_upload').reset();
-                loadList();
-            }
+            // Resize file list
+            var table = document.getElementById('table_progress');
+            var height = 265 + table.scrollHeight;
+            document.getElementById('files').style.maxHeight = 'calc(100vh - ' + height + 'px)';
+            // Reload list if this was the progress bar
+            if (table.rows.length == 0) loadList();
         }
     };
     xhttp.upload.addEventListener('progress', function(e) {
@@ -442,6 +452,7 @@ function uploadFile(file, i) {
     xhttp.open('POST', '/file');
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send(data);
+    var cancel = document.getElementById('cancel_' + i);
     cancel.addEventListener('click', abortUpload(xhttp), false);
 }
 
@@ -451,8 +462,8 @@ function importCsv() {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            // Reload page when import was successful, otherwise display error
-            (this.status == 200) ? window.location.reload(false) : displayError(this);
+            // Reload data when import was successful, otherwise display error
+            (this.status == 200) ? loadData() : displayError(this);
         }
     };
     xhttp.open("POST", "/csv", true);
@@ -463,10 +474,7 @@ function importCsv() {
 
 function loadLog() {
     var log = document.getElementById('log');
-    // Remove all content
-    while (log.firstChild) {
-        log.removeChild(log.firstChild);
-    }
+    removeContent(log);
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -545,13 +553,10 @@ function openPage(evt, name) {
 
 function openModal(head, txt) {
     return function() {
-        event.preventDefault()
-		document.getElementById('modalhead').innerHTML = head;
+        event.preventDefault();  // Prevent default action for anchor tag
+        document.getElementById('modalhead').innerHTML = head;
         var modalcontent = document.getElementById('modalcontent');
-        // Remove all content
-        while (modalcontent.firstChild) {
-            modalcontent.removeChild(modalcontent.firstChild);
-        }
+        removeContent(modalcontent);
         // Add content
         var pre = document.createElement('PRE');
         pre.innerHTML = txt;
@@ -559,6 +564,7 @@ function openModal(head, txt) {
         // Display modal frame
         var modal = document.getElementById('modal');
         modal.style.display = 'block';
+        // Close the modal by clicking outside of the modal frame
         window.onclick = function(event) {
             if (event.target == modal) modal.style.display = "none";
         };

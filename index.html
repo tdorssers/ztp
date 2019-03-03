@@ -9,7 +9,7 @@
         <link rel="stylesheet" href="style.css" />
         <script type="text/javascript" src="main.js"></script>
     </head>
-    <body onload="loadData()">
+    <body>
         <h3>ZTP GUI App</h3>
         <div class="tab">
             <button class="tablinks" onclick="openPage(event, 'hometab')" id="defaultOpen">Home</button>
@@ -36,6 +36,7 @@
                             <input type="button" value="Submit" onclick="submitData(false)" />
                         </td>
                         <td class="right">
+                            <input type="button" value="Reload" onclick="loadData()"/>
                             <input type="button" value="Export" onclick="submitData(true)" />
                             <input type="button" value="Import" onclick="document.getElementById('hiddenfile').click()" />
                             <input type="file" id="hiddenfile" style="display:none;" onchange="importCsv()" />
@@ -61,6 +62,7 @@
                         </td>
                         <td class="min">
                             <input type="button" value="Upload" onclick="upload()" />
+                            <input type="button" value="Refresh" onclick="loadList()"/>
                         </td>
                     </tr>
                 </table>
@@ -75,6 +77,12 @@
             </div>
         </div>
         &nbsp;
-        <script type="text/javascript">document.getElementById("defaultOpen").click();</script>
+        <script type="text/javascript">
+window.onbeforeunload = function() {return ""};
+document.getElementById("defaultOpen").click();
+loadLog();
+loadData();
+loadList();
+        </script>
     </body>
 </html>

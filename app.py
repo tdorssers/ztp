@@ -159,16 +159,16 @@ def get_csv():
         flat_data = []
         for dct in data:
             flat = OrderedDict()
-            for k in dct.keys():
+            for k in dct:
                 if isinstance(dct[k], OrderedDict):
-                    for kk in dct[k].keys():
+                    for kk in dct[k]:
                         flat[str(k) + '/' + str(kk)] = dct[k][kk]
                 else:
                     flat[k] = dct[k]
             flat_data.append(flat)
 
         # Find column names
-        columns = [k for row in flat_data for k in row.keys()]
+        columns = [k for row in flat_data for k in row]
         columns = list(OrderedDict.fromkeys(columns).keys())
         # Write CSV to buffer
         if sys.version_info >= (3, 0, 0):
@@ -201,7 +201,8 @@ def post_data():
         dct = OrderedDict(zip(headers, row))
         # Construct original cubic data structure
         cubic = OrderedDict()
-        for k in dct.keys():
+        for k in dct:
+            # Split keys
             kk = k.split('/')
             if dct[k] and len(kk) == 2:
                 if kk[0] in cubic:
@@ -282,31 +283,51 @@ def log_delete():
         error(e)
 
 def validate(data):
-    """ Validates data and raises ValueError if invalid """
+    """ Raises ValueError if data is invalid """
     if not isinstance(data, list):
         raise ValueError('Expecting JSON array of objects')
 
     num_defaults = 0
+    stack_values = []
     for my in data:
         if not isinstance(my, OrderedDict):
             raise ValueError('Expecting JSON array of objects')
 
-        if 'stack' in my and not isinstance(my['stack'], OrderedDict):
-            raise ValueError('Stack must be JSON object')
+        if 'stack' in my:
+            if not isinstance(my['stack'], OrderedDict):
+                raise ValueError('Stack must be JSON object')
+
+            # Make list of keys that are not a natural number
+            nan = [k for k in my['stack'] if not k.isdigit()]
+            if len(nan):
+                raise ValueError("'stack' object name must be a number")
+
+            # Make list of blank values
+            empty = [v for v in my['stack'].values() if not v or v.isspace()]
+            if len(empty):
+                raise ValueError("Empty 'stack' object value not allowed")
+
+            # Check for duplicate values
+            if (len(set(my['stack'].values())) != len(my['stack'].values())
+                or any(v in stack_values for v in my['stack'].values())):
+                    raise ValueError("'stack' object values must be unique")
+
+            stack_values.extend(my['stack'].values())
+        else:
+            num_defaults += 1
 
         if 'subst' in my and not isinstance(my['subst'], OrderedDict):
-            raise ValueError('Subst must be JSON object')
+            raise ValueError("'subst' must be JSON object")
 
-        num_obj = [len(v) for v in my.values() if isinstance(v, OrderedDict)]
-        if 0 in num_obj:
+        # Make list of dict lengths
+        val_len = [len(v) for v in my.values() if isinstance(v, OrderedDict)]
+        if 0 in val_len:
             raise ValueError('Empty JSON object not allowed')
 
+        # Make list of blank keys
         empty = [k for k in my if not k or k.isspace()]
         if len(empty):
-            raise ValueError('Empty JSON keys not allowed')
-
-        if not 'stack' in my:
-            num_defaults += 1
+            raise ValueError('Empty JSON object name not allowed')
 
     if num_defaults > 1:
         raise ValueError('Maximum of one object without stack key is allowed')
