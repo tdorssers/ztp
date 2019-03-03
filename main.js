@@ -232,8 +232,6 @@ function submitData(exportCsv) {
     var data = [];
     var tables = document.getElementsByTagName('TABLE');
     for (var i = 0; i < tables.length; i++) {
-        //var tableId = tables[i].id;
-        //if (tableId === null) continue;
         // Split the table ID into array index and key name
         var refName = tables[i].id.split('_');
         if (isNaN(refName[1])) continue;
@@ -293,8 +291,8 @@ function loadData() {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-			removeContent(document.getElementById('stacks'));
-			removeContent(document.getElementById('defaults'));
+            removeContent(document.getElementById('stacks'));
+            removeContent(document.getElementById('defaults'));
             createContent.lastIndex = 0;
             if (this.status == 200) {
                 // Parse retrieved JSON data
