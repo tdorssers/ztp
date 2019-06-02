@@ -245,6 +245,7 @@ def log_get():
     # Send log buffer
     return json.dumps(logbuf)
 
+@bottle.post('/log')
 @bottle.put('/log')
 def log_put():
     """ Appends JSON log entries to file """

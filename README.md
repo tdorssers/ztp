@@ -8,6 +8,8 @@ Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/pro
 
 First step is to check if whether there is a startup config present, if not, then the second step is to perform a DHCP request. The third step is to download the script specified in the DHCP reply. The forth and final step is to run the Python script in the Guest Shell environment. The Guest Shell remains enabled after the script has been executed.
 
+If your hardware and/or software does not support ZTP, you can use the [alternative](autoinstall) implementation.
+
 ## Overview
 
 By default, the Guest Shell has access to the network via the RP management port. When a device is connected to the network through the front-panel ports, the Guest Shell has no network connection. *script.py* uses CLI commands such as `copy` and `more` to access the network.
