@@ -1,0 +1,28 @@
+!
+! Kickstart configuration
+! Adept copy URL to your needs
+!
+event manager applet kickstart
+ event timer countdown name KS_CNTDWN time 1
+ action 0.0 handle-error type ignore
+ action 0.1 context retrieve key KS_SPAWN variable "spawn"
+ action 0.2 if $spawn eq 1
+ action 0.3 syslog msg "Script already spawned"
+ action 0.4 exit
+ action 0.5 end
+ action 0.6 set spawn 1
+ action 0.7 context save key KS_SPAWN variable "spawn"
+ action 1.0 cli command "enable"
+ action 1.1 cli command "config t"
+ action 1.2 cli command "file prompt quiet"
+ action 1.3 cli command "do copy http://10.0.0.1:8080/file/script.tcl flash:"
+ action 1.4 cli command "no file prompt quiet"
+ action 1.5 cli command "event manager directory user policy flash:"
+ action 1.6 cli command "event manager policy script.tcl"
+ action 1.8 cli command "do event manager run script.tcl"
+ action 2.0 cli command "no event manager directory user policy flash:"
+ action 2.1 cli command "no event manager policy script.tcl"
+ action 2.2 cli command "no event manager applet kickstart"
+ action 2.3 cli command "end"
+!
+end
