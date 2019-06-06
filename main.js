@@ -88,8 +88,8 @@ function createTableRow(table, object, key) {
             var ele = createDropdown(object[key], id, function() {
                 // Auto fill version input if version can be extracted from file name
                 var version = document.getElementById(table.id + '_version');
-                var match = /\.(\d+.\d+.\d+\w?)\./g.exec(document.getElementById(id).value);
-                if (match) version.value = match[1].replace(/\b0+(\d)/g, '$1');
+                var match = /\.(\d+.\d+.\d+)\.?(\w?)\./g.exec(document.getElementById(id).value);
+                if (match) version.value = match[1].replace(/\b0+(\d)/g, '$1') + match[2];
             });
             break;
         case 'config':
