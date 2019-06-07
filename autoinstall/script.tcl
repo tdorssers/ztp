@@ -43,21 +43,6 @@ set JSON "http://10.0.0.1:8080/data"
 # 'save'    : boolean to indicate to save configuration at script completion
 # 'template': string holding configuration template with $-based placeholders
 set DATA {}
-#set DATA [list \
-#[list base_url "http://10.0.0.1:8080/" \
-#	version "16.6.4" \
-#	cli "show inventory" \
-#	install "./cat9k_iosxe.16.06.04.SPA.bin" \
-#	save 1 \
-#	template {hostname ${name}s
-#			ip domain name $$lab
-#			ip name-server 8.8.8.8
-#			interface range $uplink1 , $uplink2
-#			 description uplink}] \
-#[list stack [list 3 "FCW2237D0LR" 1 "FCW2237G0L7" 2 "FOC2237X0DW"] \
-#	"subst" [list name "switch1" \
-#	uplink1 "Gi1/0/1" \
-#	uplink2 "Gi2/0/1"]]]
 
 # PROCEDURES ##################################################################
 
@@ -287,7 +272,7 @@ proc install {targetName isChassis} {
 		}
 	}
 	# Confirm proceed
-	if [regexp {\[(y.*)/n.*]} $result -> reply] {
+	if [regexp {\[(y.*?)/n.*]} $result -> reply] {
 		cli_write $cli1(fd) $reply
 		# Wait for command to complete and the router prompt
 		cli_read $cli1(fd)
@@ -347,7 +332,7 @@ proc install {targetName isChassis} {
 		}
 	}
 	# Confirm proceed
-	if [regexp {\[(y.*)/n.*]} $result -> reply] {
+	if [regexp {\[(y.*?)/n.*]} $result -> reply] {
 		cli_write $cli1(fd) $reply
 	} else {
 		log err "Install failed"
@@ -365,6 +350,8 @@ proc install {targetName isChassis} {
 			shutdown 0 1
 		}
 	}
+	# Wait for command to complete and the router prompt
+	cli_read $cli1(fd)
 	return 1
 }
 
@@ -376,11 +363,17 @@ proc autoupgrade {} {
 	} else {
 		# Look for a switch in version mismatch state
 		if [string match "*V-Mismatch*" $result] {
-			if [catch {cli_exec $cli1(fd) "request platform software package install autoupgrade"} result] {
+			set invalid "*% Invalid input detected at '^' marker.*"
+			if [catch {cli_exec $cli1(fd) "install autoupgrade"} result] {
 				error $result $errorInfo
 			}
-			if [string match "*% Invalid input detected at '^' marker.*" $result] {
-				cli_exec $cli1(fd) "software auto-upgrade"
+			if [string match $invalid $result] {
+				if [catch {cli_exec $cli1(fd) "request platform software package install autoupgrade"} result] {
+					error $result $errorInfo
+				}
+				if [string match $invalid $result] {
+					cli_exec $cli1(fd) "software auto-upgrade"
+				}
 			}
 			return 1
 		} else {
@@ -560,7 +553,7 @@ proc upload {args} {
 	foreach {key value} $args {
 		set ztp($key) $value
 	}
-	if [info exists LOGAPI] {
+	if {[info exists LOGAPI] && [string length $LOGAPI]} {
 		set data [jsonFromList [array get ztp]]
 		# HTTP POST request
 		if [catch {set token [::http::geturl $LOGAPI -query $data]} msg] {
@@ -598,7 +591,7 @@ proc shutdown {save abnormal} {
 	}
 	# Store script state to LOGAPI if specified
 	upload status [expr {$abnormal ? "Failed" : "Finished"}]
-	if [info exists SYSLOG] {
+	if {[info exists SYSLOG] && [string length $SYSLOG]} {
 		cli_exec $cli1(fd) "config t"
 		cli_exec $cli1(fd) "no logging host $SYSLOG"
 		cli_exec $cli1(fd) "no logging discriminator ztp"
@@ -625,7 +618,7 @@ if [catch {cli_exec $cli1(fd) "enable"} result] {
 	error $result $errorInfo
 }
 # Setup IOS syslog for our own messages if server IP is specified
-if [info exists SYSLOG] {
+if {[info exists SYSLOG] && [string length $SYSLOG]} {
 	cli_exec $cli1(fd) "config t"
 	cli_exec $cli1(fd) "logging discriminator ztp msg-body includes HA_EM|INSTALL"
 	cli_exec $cli1(fd) "logging host $SYSLOG discriminator ztp"
@@ -639,7 +632,7 @@ if [catch {lappend DATA} msg] {
 	shutdown 0 1
 }
 # Load JSON formatted data if URL is specified and concatenate it to DATA
-if [info exists JSON] {
+if {[info exists JSON] && [string length $JSON]} {
 	if [catch {set token [::http::geturl $JSON]} msg] {
 		log err $msg
 		shutdown 0 1

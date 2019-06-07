@@ -4,11 +4,11 @@
 
 Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/169/b_169_programmability_cg/zero_touch_provisioning.html) on IOS XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
 
+If your hardware and/or software does not support ZTP, you can use the [alternative](autoinstall) AutoInstall implementation.
+
 ![](media/ztp.png)
 
 First step is to check if whether there is a startup config present, if not, then the second step is to perform a DHCP request. The third step is to download the script specified in the DHCP reply. The forth and final step is to run the Python script in the Guest Shell environment. The Guest Shell remains enabled after the script has been executed.
-
-If your hardware and/or software does not support ZTP, you can use the [alternative](autoinstall) implementation.
 
 ## Overview
 

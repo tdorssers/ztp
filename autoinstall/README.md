@@ -99,6 +99,6 @@ The installation of the GUI app is the same, except *script.tcl* is used instead
 
 ## Testing
 
-The script has been successfully tested on the following platforms running 16.3.x and higher software:
+The script has been successfully tested on the following platforms running IOS XE 3.6.x, 16.3.x, 16.6.x and 16.9.x software:
 - Cisco Catalyst 9300 Series Switches
 - Cisco Catalyst 3850 Series Switches
