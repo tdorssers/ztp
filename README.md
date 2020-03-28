@@ -50,7 +50,7 @@ By default, the Guest Shell has access to the network via the RP management port
   *save* | boolean to indicate to save configuration at script completion
   *template* | string holding configuration template with $-based placeholders
 
-Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS XE images and configurations can be served by any HTTP server. Example configuration of *script.py*:
+Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS XE images and configurations can be served by any HTTP server. The configuration template does not support multi-line banners, this is a limitation of ZTP. Example configuration of *script.py*:
 
 ```python
 SYSLOG = '10.0.0.1'
