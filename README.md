@@ -157,7 +157,7 @@ The app can be run on Windows as well. Python 2.7+ and 3.4+ are supported.
 As an alternative the app can also be used in a Docker container by running the following commands:
 ```
 docker build -t ztp .
-docker run --rm -d -p 8080:8080 --name ztp  ztp
+docker run --rm -e ZTP_IP=192.168.0.4 -e ZTP_PORT=8080 -p 8080:8080 --name ztp ztp
 ```
 
 ## Testing
