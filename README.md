@@ -154,6 +154,12 @@ Put *app.py*, *index.html*, *main.js*, *style.css* and *script.py* in a director
 
 The app can be run on Windows as well. Python 2.7+ and 3.4+ are supported.
 
+As an alternative the app can also be used in a Docker container by running the following commands:
+```
+docker build -t ztp .
+docker run --rm -e ZTP_IP=192.168.0.4 -e ZTP_PORT=8080 -p 8080:8080 --name ztp ztp
+```
+
 ## Testing
 
 The script has been successfully tested on the following platforms running 16.6.x and higher software:
