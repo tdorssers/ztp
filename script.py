@@ -132,7 +132,9 @@ def upload(**kwargs):
     ztp.update(kwargs)
     if LOGAPI:
         try:
-            with open('/bootflash/temp.json', 'w') as outfile:
+            if not os.path.exists('/bootflash/guest-share'):
+                os.mkdir('/bootflash/guest-share')
+            with open('/bootflash/guest-share/temp.json', 'w') as outfile:
                 json.dump(ztp, outfile)
         except (IOError, ValueError) as e:
             log(3, e)
@@ -140,7 +142,7 @@ def upload(**kwargs):
 
         for retry in range(3):
             log(6, 'Storing %s...' % LOGAPI)
-            result = cli.execute('copy temp.json %s' % LOGAPI)
+            result = cli.execute('copy guest-share/temp.json %s' % LOGAPI)
             # log error message in case of failure
             match = re.search('^(%Error .*)', result, re.MULTILINE)
             if match:
@@ -149,7 +151,7 @@ def upload(**kwargs):
                 break
 
         try:
-            os.remove('/bootflash/temp.json')
+            os.remove('/bootflash/guest-share/temp.json')
         except OSError as e:
             log(3, e)
 
