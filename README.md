@@ -170,3 +170,5 @@ The script has been successfully tested on the following platforms running 16.6.
 The following platforms have known issues with 16.6.x software that are resolved in 16.8.x and higher software:
 - Cisco Catalyst 3650 Series Switches
 - Cisco Catalyst 3850 Series Switches
+
+Platforms running 16.12.4 software have a known issue [CSCvw63161](https://quickview.cloudapps.cisco.com/quickview/bug/CSCvw63161) and you can use the [alternative](autoinstall) AutoInstall implementation as a workaround.
