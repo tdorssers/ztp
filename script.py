@@ -12,7 +12,7 @@ Supported platforms, software versions and other details can be found at:
 https://cs.co/ztp_provisioning
 
 Author:  Tim Dorssers
-Version: 1.1
+Version: 1.2
 """
 
 import os
@@ -192,7 +192,7 @@ def renumber_stack(stack, serials):
             try:
                 cli.execute('switch {} renumber {}'.format(old_num, new_num))
                 log(6, 'Renumbered switch {} to {}'.format(old_num, new_num))
-            except cli.CLISyntaxError as e:
+            except Exception as e:
                 log(3, e)
                 shutdown(save=False, abnormal=True)  # terminate script
 
@@ -210,7 +210,7 @@ def renumber_stack(stack, serials):
                 try:
                     cli.execute('switch %s priority %d' % (old_num, new_prio))
                     log(6, 'Switch %s priority set to %d' % (old_num, new_prio))
-                except cli.CLISyntaxError as e:
+                except Exception as e:
                     log(3, e)
                     shutdown(save=False, abnormal=True)  # terminate script
 
@@ -219,7 +219,7 @@ def renumber_stack(stack, serials):
             # to prevent recovery from backup nvram
             try:
                 cli.execute('delete flash-%s:nvram_config*' % num)
-            except cli.CLISyntaxError as e:
+            except Exception as e:
                 pass
 
     return renumber
@@ -327,7 +327,7 @@ def apply_config(target):
     # apply configuration and log error message in case of failure
     try:
         cli.configure(conf)
-    except cli.CLIConfigurationError as e:
+    except Exception as e:
         log(3, 'Failed configurations:\n' + '\n'.join(map(str, e.failed)))
         shutdown(save=False, abnormal=True)  # terminate script
     else:
@@ -339,12 +339,12 @@ def blue_beacon(sw_nums):
         # up to and including 16.8.x
         try:
             cli.cli('configure terminal ; hw-module beacon on switch %d' % num)
-        except (cli.errors.cli_syntax_error, cli.errors.cli_exec_error):
+        except:
             pass
         # from 16.9.x onwards
         try:
             cli.execute('hw-module beacon slot %d on' % num)
-        except cli.CLISyntaxError:
+        except:
             pass
 
         log(6, 'Switch %d beacon LED turned on' % num)
@@ -373,7 +373,7 @@ def final_cli(command):
 
             try:
                 output = cli.execute(cmd)  # execute command
-            except cli.CLISyntaxError as e:
+            except Exception as e:
                 log(3, 'Final command failure: %s' % e)
                 success = False
             else:
