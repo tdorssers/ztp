@@ -4,7 +4,7 @@
 
 Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/169/b_169_programmability_cg/zero_touch_provisioning.html) on IOS XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
 
-If your hardware and/or software does not support ZTP, you can use the [alternative](autoinstall) AutoInstall implementation.
+If your hardware (eg. 9200L) and/or software does not support ZTP, you can use the [alternative](autoinstall) AutoInstall implementation.
 
 ![](media/ztp.png)
 
@@ -50,7 +50,17 @@ By default, the Guest Shell has access to the network via the RP management port
   *save* | boolean to indicate to save configuration at script completion
   *template* | string holding configuration template with $-based placeholders
 
-Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS XE images and configurations can be served by any HTTP server. The configuration template does not support multi-line banners, this is a limitation of ZTP. Example configuration of *script.py*:
+Default settings are inherited by all stacks, but stack settings have preference. For example: if the default version is 16.6.5 and the stack version is 16.9.2, then the latter is used. When the variable DATA is filled, the script, IOS XE images and configurations can be served by any HTTP server. The configuration template does not support multi-line banners, this is a limitation of ZTP. Python expressions can be used in the final *cli* command string. For example to use the serial number in a file name:
+
+`copy run http://10.0.0.1:8080/file/{{ztp['serial']}}.conf`
+
+Or to pause the command execution for a moment:
+
+`{{time.sleep(10)}}`
+
+## Configuration
+
+Example configuration of *script.py* for standalone usage without GUI app:
 
 ```python
 SYSLOG = '10.0.0.1'
@@ -78,7 +88,7 @@ DATA = [{
 ]
 ```
 
-Instead of entering the data directly into *script.py*, the GUI app can be used to enter the data and serve the files. The same key names of the list of dicts that defines device data, are displayed in the GUI app. Example configuration of *script.py*:
+Instead of entering the data directly into *script.py*, the GUI app can be used to enter the data and serve the files. The same key names of the list of dicts that defines device data, are displayed in the GUI app. Example configuration of *script.py* for GUI app usage:
 
 ```python
 SYSLOG = '10.0.0.1'
@@ -87,21 +97,13 @@ JSON = 'http://10.0.0.1:8080/data'
 DATA = []
 ```
 
-Python expressions can be used in the final *cli* command string. For example to use the serial number in a file name:
-
-`copy run http://10.0.0.1:8080/file/{{ztp['serial']}}.conf`
-
-Or to pause the command execution for a moment:
-
-`{{time.sleep(10)}}`
-
 ## GUI App
 
 The GUI App consists of two components:
 - A RESTful web server backend *app.py* based on [Bottle](http://bottlepy.org/) (a micro web framework for Python) and [Waitress](http://waitress.readthedocs.io/) a production-quality pure-Python WSGI server
 - An AJAX web client written in pure JavaScript (*index.html*, *main.js* and *style.css*)
 
-Simply put, the client retrieves instruction data from the server and stores new instruction data on the server entered by the user. Then *script.py* retrieves that instruction data, executes it and stores the output on the server:
+Simply put, the web client retrieves instruction data from the server and stores new instruction data on the server entered by the user. Then *script.py* retrieves that instruction data, executes it and stores the output on the server:
 
 ![](media/api.png)
 
@@ -167,8 +169,13 @@ The script has been successfully tested on the following platforms running 16.6.
 - Cisco Catalyst 9400 Series Switches
 - Cisco Catalyst 9500 Series Switches
 
-The following platforms have known issues with 16.6.x software that are resolved in 16.8.x and higher software:
+The script has been successfully tested on the following platforms running 16.8.x and higher software:
 - Cisco Catalyst 3650 Series Switches
 - Cisco Catalyst 3850 Series Switches
+
+The script should support the following platforms running 16.12.x and higher software:
+- Cisco Catalyst 9200 Series Switches
+- Cisco Catalyst 9300L Series Switches
+- Cisco Catalyst 9600 Series Switches
 
 Platforms running 16.12.4 software have a known issue [CSCvw63161](https://quickview.cloudapps.cisco.com/quickview/bug/CSCvw63161) and you can use the [alternative](autoinstall) AutoInstall implementation as a workaround.
