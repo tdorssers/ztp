@@ -1,7 +1,7 @@
 /**
  * ZTP GUI Web App
  * Author: Tim Dorssers
- * Version: 1.1
+ * Version: 1.2
  */
 
 function createDropdown(value, id, callback) {
@@ -217,15 +217,19 @@ function removeTable(id) {
 }
 
 function addTable() {
-    createContent([{"stack":null}]);
+    createContent([{"stack": {"1": null}}]);
+	// Scroll down to added stack table
+	document.getElementById('table_' + (createContent.lastIndex - 1)).scrollIntoView();
 }
 
 function displayError(xhttp) {
-    if (xhttp.status == 500 && xhttp.getResponseHeader('Content-type') == 'application/json') {
+    if (xhttp.getResponseHeader('Content-type') == 'application/json') {
         alert(JSON.parse(xhttp.responseText));
     } else if (xhttp.status) {
         alert(xhttp.statusText);
-    }
+    } else {
+		alert('Error occurred requesting data from server');
+	}
 }
 
 function submitData(exportCsv) {
@@ -277,6 +281,8 @@ function submitData(exportCsv) {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
+			// Reload data for 412 status or refresh lastModified except when server error occurred
+			if (this.status < 500) loadData(this.status != 412);
             // Open URL if exporting to CSV, otherwise display HTTP status
             (exportCsv && this.status == 200) ? window.open('/csv', '_blank') : displayError(this);
         }
@@ -284,17 +290,20 @@ function submitData(exportCsv) {
     xhttp.open("POST", "/data", true);
     xhttp.setRequestHeader("Content-type", "application/json");
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+	if (submitData.lastModified) xhttp.setRequestHeader('If-Unmodified-Since', submitData.lastModified);
     xhttp.send(JSON.stringify(data));
 }
 
-function loadData() {
+function loadData(ignoreBody) {
     xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
+            submitData.lastModified = this.getResponseHeader('Last-Modified');
+			if (ignoreBody) return;
             removeContent(document.getElementById('stacks'));
             removeContent(document.getElementById('defaults'));
             createContent.lastIndex = 0;
-            if (this.status == 200) {
+			if (this.status == 200) {
                 // Parse retrieved JSON data
                 var data = JSON.parse(this.responseText);
                 // Look for a defaults object
@@ -312,7 +321,7 @@ function loadData() {
             }
         }
     };
-    xhttp.open("GET", "/data", true);
+    xhttp.open(ignoreBody ? "HEAD" : "GET", "/data", true);
     xhttp.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhttp.send();
 }
@@ -461,7 +470,7 @@ function importCsv() {
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
             // Reload data when import was successful, otherwise display error
-            (this.status == 200) ? loadData() : displayError(this);
+            (this.status == 200) ? loadData(false) : displayError(this);
         }
     };
     xhttp.open("POST", "/csv", true);
