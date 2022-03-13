@@ -2,7 +2,7 @@
 
 # Zero Touch Provisioning
 
-Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/169/b_169_programmability_cg/zero_touch_provisioning.html) on IOS XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
+Cisco has introduced [ZTP](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/prog/configuration/173/b_173_programmability_cg/zero_touch_provisioning.html) on IOS XE 16.5.1 onwards to give a device the capability to download and run a Python script in a Linux Guest Shell to perform software upgrade and configuration tasks on the device.
 
 If your hardware (eg. 9200L) and/or software does not support ZTP, you can use the [alternative](autoinstall) AutoInstall implementation.
 
@@ -123,9 +123,9 @@ Call | Description
 *GET /log* | upon receiving the request, the server sends the log entries as JSON text to the client
 *PUT /log* | used by *script.py* to send ZTP workflow output as JSON text to the server
 
-*app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files are served from the current working directory. The directory listing API returns subdirectories and hides related script files.
+*app.py* validates the format of the data for every API call. Error messages from failed API calls are presented in the GUI by returning an HTTP 500 response with a message string. Files and directories are served from the current working directory. The directory listing API returns subdirectories only. Uploaded files are put into the *uploaded* directory by default.
 
-On the Home tab, the GUI lists all logged runs of *script.py*. The GUI displays text boxes for every key value in the DATA list of dicts on the Settings tab. The *install* and *config* text boxes are drop-down lists with the files in the working directory. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files on the Files tab:
+On the Home tab, the GUI lists all logged runs of *script.py*. The GUI displays text boxes for every key value in the DATA list of dicts on the Settings tab. The *install* and *config* text boxes are drop-down lists with the files in the subdirectories. The *version* text box is filled in automatically if the IOS XE version can be extracted from the file name. The GUI also supports uploading of multiple selected files on the Files tab:
 
 ![](media/gui.png)
 ![](media/gui2.png)
@@ -179,3 +179,5 @@ The script should support the following platforms running 16.12.x and higher sof
 - Cisco Catalyst 9600 Series Switches
 
 Platforms running 16.12.4 software have a known issue [CSCvw63161](https://quickview.cloudapps.cisco.com/quickview/bug/CSCvw63161) and you can use the [alternative](autoinstall) AutoInstall implementation as a workaround.
+
+This script uses an [EEM applet](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/eem/configuration/xe-16-12/eem-xe-16-12-book/eem-policy-cli.html) for software installation, which requires a DNA Essentials license.

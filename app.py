@@ -12,6 +12,7 @@ Version: 1.2
 
 import io
 import os
+import re
 import csv
 import sys
 import json
@@ -26,15 +27,16 @@ except ImportError:
 from collections import OrderedDict
 import bottle
 
-HIDE = ['app.py', 'data.json', 'favicon.ico', 'index.html', 'main.js',
-        'log.json', 'style.css', 'script.py']
+BASE_URL = 'http://10.0.0.1:8080/file/'  # Default base URL
+UPLOAD_DIR = 'uploaded'  # Default upload folder
+HIDE = r'\..*|autoinstall|media'  # Folders to hide
 
 @bottle.hook('before_request')
 def log():
     """ Logs request from client to stderr """
-    req = bottle.request
-    path = req.path + '?' + req.query_string if req.query_string else req.path
-    logging.info('%s - %s %s', req.remote_addr, req.method, path)
+    ra, qs = bottle.request.remote_addr, bottle.request.query_string
+    path = bottle.request.path + '?' + qs if qs else bottle.request.path
+    logging.info('%s - %s %s', ra, bottle.request.method, path)
 
 def error(msg, code=500):
     """ Sends HTTP status with error message string by raising HTTPResponse """
@@ -55,19 +57,29 @@ def get_file(filepath):
 @bottle.delete('/file/<filepath:path>')
 def delete_file(filepath):
     """ Removes specified file """
-    if any(name in filepath for name in HIDE):
-        error('Cannot remove %s' % filepath)
-    else:
-        try:
-            os.remove(filepath)
-        except OSError as e:
-            error(e)
+    filepath = os.path.normpath(filepath)
+    try:
+        with open('data.json') as infile:
+            data = validate(json.load(infile, object_pairs_hook=OrderedDict))
+
+        # Check string object values for filepath
+        for obj, name in (item for my in data for item in my.items()):
+            if hasattr(name, 'split') and filepath == os.path.normpath(name):
+                error("Cannot delete. '%s' is used by '%s' object" % (name, obj))
+    except (ValueError, IOError):
+        pass
+
+    try:
+        os.remove(filepath)
+    except OSError as e:
+        error(e)
 
 @bottle.put('/file/<filepath:path>')
 def put_file(filepath):
     """ Handles file upload """
-    folder, fname = os.path.split(filepath)
-    upload = bottle.FileUpload(bottle.request.body, None, filename=fname)
+    folder, filename = os.path.split(filepath)
+    folder = folder or UPLOAD_DIR
+    upload = bottle.FileUpload(bottle.request.body, None, filename=filename)
     try:
         if folder and not os.path.exists(folder):
             os.makedirs(folder)
@@ -79,7 +91,7 @@ def put_file(filepath):
 @bottle.post('/file')
 def post_file():
     """ Handles form data for file uploading """
-    folder = bottle.request.forms.get('folder')
+    folder = bottle.request.forms.get('folder') or UPLOAD_DIR
     upload = bottle.request.files.get('upload')
     try:
         if folder and not os.path.exists(folder):
@@ -92,16 +104,15 @@ def post_file():
 @bottle.route('/list')
 def get_list():
     """ Compiles a list of files and sends it to the web server """
-    flist = []
+    result = []
     for root, dirs, files in os.walk('.'):
         # Don't visit hidden directories
-        dirs[:] = [name for name in dirs if not name.startswith('.')]
-        # Exclude specific and hidden files
-        for name in files:
-            if not name in HIDE and not name.startswith('.'):
-                fname = os.path.join(root, name)
-                fsize = os.path.getsize(fname)
-                flist.append({'file': fname.replace('\\', '/'), 'size': fsize})
+        dirs[:] = [name for name in dirs if not re.match(HIDE, name)]
+        if root != '.':
+            for name in files:
+                filename = os.path.join(root, name)
+                result.append({'file': filename.replace('\\', '/'),
+                               'size': os.path.getsize(filename)})
 
     # Prepare response header
     bottle.response.content_type = 'application/json'
@@ -109,7 +120,7 @@ def get_list():
     bottle.response.set_header('Pragma', 'no-cache')
     bottle.response.set_header('Cache-Control',
                                'no-cache, no-store, must-revalidate')
-    return json.dumps(flist)
+    return json.dumps(result)
 
 @bottle.get('/data')
 def get_data():
@@ -121,9 +132,10 @@ def get_data():
     bottle.response.set_header('Cache-Control',
                                'no-cache, no-store, must-revalidate')
     # Load, validate and send JSON data
-    data = [OrderedDict()]
+    data = [OrderedDict(base_url=BASE_URL)]
     try:
         if os.path.exists('data.json'):
+            # Include last modified date in response header
             value = email.utils.formatdate(os.path.getmtime('data.json'),
                                            usegmt=True)
             bottle.response.set_header('Last-Modified', value)
@@ -173,11 +185,7 @@ def get_csv():
         columns = [k for row in flat_data for k in row]
         columns = list(OrderedDict.fromkeys(columns).keys())
         # Write CSV to buffer
-        if sys.version_info >= (3, 0, 0):
-            csvbuf = io.StringIO()
-        else:
-            csvbuf = io.BytesIO()
-
+        csvbuf = io.BytesIO() if sys.version_info[0] < 3 else io.StringIO()
         writer = csv.DictWriter(csvbuf, fieldnames=columns, delimiter=';')
         writer.writeheader()
         writer.writerows(flat_data)
@@ -286,7 +294,7 @@ def validate(data):
     if not isinstance(data, list):
         raise ValueError('Expecting JSON array of objects')
 
-    num_defaults = 0
+    defaults = OrderedDict()
     stack_values = []
     for my in data:
         if not isinstance(my, OrderedDict):
@@ -300,7 +308,7 @@ def validate(data):
             if any(True for k in my['stack'] if not k.isdigit()):
                 raise ValueError("'stack' object name must be a number")
 
-            # Make list of blank values
+            # Check for blank values
             if any(True for v in my['stack'].values() if not v or v.isspace()):
                 raise ValueError("Empty 'stack' object value not allowed")
 
@@ -310,19 +318,36 @@ def validate(data):
                 raise ValueError("'stack' object values must be unique")
 
             stack_values.extend(my['stack'].values())
+            # Check if either is set
+            if (bool('version' in my or 'version' in defaults)
+                    != bool('install' in my or 'install' in defaults)):
+                raise ValueError("'version' and 'install' are both required")
         else:
-            num_defaults += 1
-            if 'base_url' in my:
-                result = urlparse(my['base_url'])
-                if not all((result.scheme, result.netloc)):
-                    raise ValueError("Invalid 'base_url'")
+            if defaults:
+                raise ValueError("Only one object without 'stack' is allowed")
+            defaults = my
 
         if 'subst' in my:
             if not isinstance(my['subst'], OrderedDict):
                 raise ValueError("'subst' must be JSON object")
 
             if any(True for k in my['subst'] if k.startswith('$')):
-                raise ValueError("'subst' name should not start with $")
+                raise ValueError("'subst' object name should not start with $")
+
+        if 'base_url' in my:
+            result = urlparse(my['base_url'])
+            if result.scheme != 'http' or result.path != '/file/':
+                raise ValueError("'base_url' format is 'http://change.me:8080/file/'")
+
+        # Check local path existence only
+        for key in ('install', 'config'):
+            result = urlparse(my.get(key, ''))
+            if not result.scheme and result.path:
+                if 'base_url' not in my and 'base_url' not in defaults:
+                    raise ValueError("'base_url' required for relative paths")
+
+                if not os.path.exists(my[key]):
+                    raise ValueError("'%s' not found" % my[key])
 
         # Check for empty dicts
         if not all(v for v in my.values() if isinstance(v, OrderedDict)):
@@ -331,9 +356,6 @@ def validate(data):
         # Check for blank keys
         if any(True for k in my if not k or k.isspace()):
             raise ValueError('Empty JSON object name not allowed')
-
-    if num_defaults > 1:
-        raise ValueError('Maximum of one object without stack key is allowed')
 
     return data
 
