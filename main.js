@@ -349,7 +349,7 @@ function loadList() {
             var table = document.createElement('TABLE');
             table.id = 'table_file';
             var row = table.insertRow(-1);
-            ['path', 'size', 'action'].forEach(function(key) {
+            ['path', 'time', 'size', 'action'].forEach(function(key) {
                 var cell = document.createElement('TH');
                 cell.innerHTML = key;
                 row.appendChild(cell);
@@ -357,6 +357,7 @@ function loadList() {
             for (var index = 0; index < files.length; index++) {
                 var row = table.insertRow(-1);
                 row.insertCell(-1).innerHTML = files[index].file;
+				row.insertCell(-1).innerHTML = files[index].time;
                 row.insertCell(-1).innerHTML = files[index].size;
                 var cell = row.insertCell(-1);
                 cell.appendChild(createLink('Download', '/file/' + files[index].file, null));

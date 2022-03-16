@@ -27,9 +27,13 @@ except ImportError:
 from collections import OrderedDict
 import bottle
 
+##### CONSTANTS ################################################################
+
 BASE_URL = 'http://10.0.0.1:8080/file/'  # Default base URL
 UPLOAD_DIR = 'uploaded'  # Default upload folder
 HIDE = r'\..*|autoinstall|media'  # Folders to hide
+
+##### FUNCTIONS ################################################################
 
 @bottle.hook('before_request')
 def log():
@@ -105,14 +109,19 @@ def post_file():
 def get_list():
     """ Compiles a list of files and sends it to the web server """
     result = []
-    for root, dirs, files in os.walk('.'):
-        # Don't visit hidden directories
-        dirs[:] = [name for name in dirs if not re.match(HIDE, name)]
+    seen = set()
+    for root, dirs, files in os.walk('.', followlinks=True):
+        seen.add(os.path.realpath(root))
+        # Don't visit hidden and same directories
+        dirs[:] = [name for name in dirs if not re.match(HIDE, name)
+                   and os.path.realpath(os.path.join(root, name)) not in seen]
         if root != '.':
             for name in files:
                 filename = os.path.join(root, name)
+                stats = os.stat(filename)
+                mtime = time.strftime('%x %X', time.localtime(stats.st_mtime))
                 result.append({'file': filename.replace('\\', '/'),
-                               'size': os.path.getsize(filename)})
+                               'time': mtime, 'size': stats.st_size})
 
     # Prepare response header
     bottle.response.content_type = 'application/json'
