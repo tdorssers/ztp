@@ -331,6 +331,20 @@ def validate(data):
             if (bool('version' in my or 'version' in defaults)
                     != bool('install' in my or 'install' in defaults)):
                 raise ValueError("'version' and 'install' are both required")
+
+            # Check $-based substitutions
+            config = my.get('config', defaults.get('config', ''))
+            template = my.get('template', defaults.get('template', ''))
+            try:
+                with open(config) as infile:
+                    template += infile.read()
+            except:
+                pass
+            subst = my.get('subst', defaults.get('subst', OrderedDict()))
+            names = set(re.findall(r'\${?(\w+)}?', template))
+            for name in names - set(subst.keys()):
+                raise ValueError("'%s' not found in all 'subst' objects" % name)
+
         else:
             if defaults:
                 raise ValueError("Only one object without 'stack' is allowed")
@@ -345,8 +359,11 @@ def validate(data):
 
         if 'base_url' in my:
             result = urlparse(my['base_url'])
-            if result.scheme != 'http' or result.path != '/file/':
-                raise ValueError("'base_url' format is 'http://change.me:8080/file/'")
+            if not all((result.scheme, result.netloc)):
+                raise ValueError("'base_url' is not valid")
+
+            if not result.path.endswith('/'):
+                raise ValueError("'base_url' should end with /")
 
         # Check local path existence only
         for key in ('install', 'config'):
